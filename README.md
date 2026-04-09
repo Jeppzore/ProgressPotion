@@ -1,13 +1,13 @@
 # ProgressPotion
 
-ProgressPotion is a Flutter habit tracking app. This Phase 1 setup establishes the app shell, seeded habit data, Android-ready project structure, and the agent briefs that will guide later feature work.
+ProgressPotion is a Flutter task-tracking MVP with a lightweight game loop. The app supports adding tasks, completing tasks, and filling a potion meter that awards XP during the current session.
 
-## Current foundation
+## Current MVP
 
 - Single-root Flutter project at the repository root
-- Material 3 app shell with Home and Tasks placeholder screens
-- Domain scaffolding for habits in `lib/models` and `lib/services`
-- In-memory seeded data to exercise the UI before persistence lands
+- Material 3 home flow with a potion progress card and add-task screen
+- Task domain scaffolding in `lib/models`, `lib/services`, and `lib/controllers`
+- In-memory seeded data plus session-only task creation and completion
 - Root-level agent briefs for orchestration, implementation, UX, review, and QA
 
 ## Project structure
@@ -15,12 +15,14 @@ ProgressPotion is a Flutter habit tracking app. This Phase 1 setup establishes t
 ```text
 lib/
   app/
+  controllers/
   core/
   models/
   screens/
   services/
   widgets/
 test/
+  controllers/
   services/
 ```
 
@@ -35,4 +37,4 @@ flutter run
 
 ## Android focus
 
-Phase 1 is validated primarily for Android. The application ID is `com.progresspotion.app`, and the app launches with a lightweight shell that is ready for the next feature phase.
+The MVP is validated primarily for Android. The application ID is `com.progresspotion.app`, and the app launches into the main task loop with session-only progress.

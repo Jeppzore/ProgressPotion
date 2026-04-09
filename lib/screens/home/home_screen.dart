@@ -1,105 +1,79 @@
 import 'package:flutter/material.dart';
-import 'package:progress_potion/models/habit.dart';
-import 'package:progress_potion/services/habit_service.dart';
-import 'package:progress_potion/widgets/habit_preview_card.dart';
+import 'package:progress_potion/controllers/task_controller.dart';
+import 'package:progress_potion/widgets/potion_progress_card.dart';
+import 'package:progress_potion/widgets/task_tile.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.habitService});
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key, required this.taskController});
 
-  final HabitService habitService;
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  late final Future<List<Habit>> _habitsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _habitsFuture = widget.habitService.listHabits();
-  }
+  final TaskController taskController;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Habit>>(
-      future: _habitsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
+    return AnimatedBuilder(
+      animation: taskController,
+      builder: (context, _) {
+        if (taskController.error != null) {
           return const _AsyncStateMessage(
             icon: Icons.warning_amber_rounded,
-            title: 'We could not brew your habits.',
-            message: 'Check the service layer before wiring in real data.',
+            title: 'The cauldron needs a reset.',
+            message: 'We could not load tasks for this session.',
           );
         }
 
-        if (!snapshot.hasData) {
+        if (taskController.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final habits = snapshot.data!;
-        final completedToday = habits
-            .where((habit) => habit.isCompletedToday)
-            .length;
-        final strongestStreak = habits
-            .map((habit) => habit.currentStreak)
-            .fold<int>(0, (best, streak) => streak > best ? streak : best);
+        final activeTasks = taskController.activeTasks;
+        final completedTasks = taskController.completedTasks;
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
           children: [
-            _HeroBanner(
-              title: "Today's momentum",
-              message:
-                  'Build momentum one repeat at a time. Phase 1 gives us the shell, seeded habits, and room to grow into full tracking.',
-              trailing: Text(
-                '$completedToday/${habits.length} brewed',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _HomeStatCard(
-                  label: 'Active rituals',
-                  value: '${habits.length}',
-                  helper: 'Seeded habits ready for Phase 2',
-                ),
-                _HomeStatCard(
-                  label: 'Completed today',
-                  value: '$completedToday',
-                  helper: 'Read-only progress for the shell',
-                ),
-                _HomeStatCard(
-                  label: 'Best streak',
-                  value: '$strongestStreak days',
-                  helper: 'Longest streak in the demo set',
-                ),
-              ],
+            PotionProgressCard(
+              completedCount: taskController.completedCount,
+              totalCount: taskController.totalCount,
+              xp: taskController.xp,
+              progress: taskController.potionProgress,
             ),
             const SizedBox(height: 24),
-            Text(
-              'Active Habits',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            _SectionHeader(
+              title: 'Active Tasks',
+              subtitle: activeTasks.isEmpty
+                  ? 'No active tasks yet. Add one to start brewing.'
+                  : 'Complete tasks to fill the potion and gain 10 XP each.',
             ),
-            const SizedBox(height: 8),
-            Text(
-              'These cards prove the Phase 1 data flow from service to UI.',
-              style: Theme.of(context).textTheme.bodyMedium,
+            const SizedBox(height: 12),
+            if (activeTasks.isEmpty)
+              const _EmptyStateCard(
+                title: 'No active tasks',
+                message: 'Tap Add task to brew a fresh objective for this session.',
+              )
+            else
+              for (final task in activeTasks) ...[
+                TaskTile(
+                  task: task,
+                  onComplete: () => taskController.completeTask(task.id),
+                ),
+                const SizedBox(height: 12),
+              ],
+            const SizedBox(height: 24),
+            const _SectionHeader(
+              title: 'Completed Tasks',
+              subtitle: 'Completed tasks will appear here once you finish one.',
             ),
-            const SizedBox(height: 16),
-            for (final habit in habits) ...[
-              HabitPreviewCard(habit: habit),
-              const SizedBox(height: 12),
-            ],
+            const SizedBox(height: 12),
+            if (completedTasks.isEmpty)
+              const _EmptyStateCard(
+                title: 'Nothing completed yet',
+                message: 'Complete an active task to earn XP and bottle progress.',
+              )
+            else
+              for (final task in completedTasks) ...[
+                TaskTile(task: task),
+                const SizedBox(height: 12),
+              ],
           ],
         );
       },
@@ -107,92 +81,59 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HeroBanner extends StatelessWidget {
-  const _HeroBanner({
-    required this.title,
-    required this.message,
-    required this.trailing,
-  });
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, required this.subtitle});
 
   final String title;
-  final String message;
-  final Widget trailing;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF24584A), Color(0xFFDB9C42)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-          ),
-          const SizedBox(height: 20),
-          trailing,
-        ],
-      ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ],
     );
   }
 }
 
-class _HomeStatCard extends StatelessWidget {
-  const _HomeStatCard({
-    required this.label,
-    required this.value,
-    required this.helper,
-  });
+class _EmptyStateCard extends StatelessWidget {
+  const _EmptyStateCard({required this.title, required this.message});
 
-  final String label;
-  final String value;
-  final String helper;
+  final String title;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 180,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(helper, style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
         ),
       ),
     );
