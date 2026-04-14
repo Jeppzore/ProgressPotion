@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:progress_potion/models/character_stats.dart';
+import 'package:progress_potion/models/default_task_session_state.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/models/task_session_state.dart';
 import 'package:progress_potion/services/task_service.dart';
@@ -70,10 +71,7 @@ class TaskController extends ChangeNotifier {
 
     try {
       final state = await _taskService.loadState();
-      _tasks = state.tasks;
-      _potionChargeCategories = state.potionChargeCategories;
-      _totalXp = state.totalXp;
-      _stats = state.stats;
+      _replaceState(state);
     } catch (error) {
       _error = error;
     } finally {
@@ -94,10 +92,14 @@ class TaskController extends ChangeNotifier {
       description: description.trim(),
     );
 
-    final nextTasks = [task, ..._tasks];
-    await _saveState(tasks: nextTasks);
-    _tasks = nextTasks;
-    notifyListeners();
+    await _saveAndApplyState(
+      TaskSessionState(
+        tasks: [task, ..._tasks],
+        totalXp: _totalXp,
+        stats: _stats,
+        potionChargeCategories: _potionChargeCategories,
+      ),
+    );
   }
 
   Future<void> completeTask(String id) async {
@@ -121,13 +123,14 @@ class TaskController extends ChangeNotifier {
         updatedTask.category,
       ];
 
-      await _saveState(
-        tasks: nextTasks,
-        potionChargeCategories: nextPotionChargeCategories,
+      await _saveAndApplyState(
+        TaskSessionState(
+          tasks: nextTasks,
+          totalXp: _totalXp,
+          stats: _stats,
+          potionChargeCategories: nextPotionChargeCategories,
+        ),
       );
-      _tasks = nextTasks;
-      _potionChargeCategories = nextPotionChargeCategories;
-      notifyListeners();
     } finally {
       _completingTaskIds.remove(id);
     }
@@ -154,39 +157,86 @@ class TaskController extends ChangeNotifier {
       final nextPotionChargeCategories = _potionChargeCategories
           .skip(potionCapacity)
           .toList();
-      final nextTotalXp = _totalXp + result.totalXp;
-      final nextStats = _stats.add(statGains);
-
-      await _saveState(
-        totalXp: nextTotalXp,
-        stats: nextStats,
-        potionChargeCategories: nextPotionChargeCategories,
+      await _saveAndApplyState(
+        TaskSessionState(
+          tasks: _tasks,
+          totalXp: _totalXp + result.totalXp,
+          stats: _stats.add(statGains),
+          potionChargeCategories: nextPotionChargeCategories,
+        ),
       );
-      _potionChargeCategories = nextPotionChargeCategories;
-      _totalXp = nextTotalXp;
-      _stats = nextStats;
-      notifyListeners();
       return result;
     } finally {
       _isClaimingPotionReward = false;
     }
   }
 
-  Future<void> _saveState({
-    List<Task>? tasks,
-    int? totalXp,
-    CharacterStats? stats,
-    List<TaskCategory>? potionChargeCategories,
+  Future<void> grantAdminProgress({
+    required int xpDelta,
+    required CharacterStats statDelta,
   }) async {
-    await _taskService.saveState(
+    if (xpDelta <= 0 && statDelta.isZero) {
+      throw ArgumentError(
+        'Admin progress must include a positive XP delta or stat gain.',
+      );
+    }
+    if (xpDelta < 0) {
+      throw ArgumentError.value(
+        xpDelta,
+        'xpDelta',
+        'XP delta must be positive.',
+      );
+    }
+    _validateNonNegativeStats(statDelta);
+
+    await _saveAndApplyState(
       TaskSessionState(
-        tasks: tasks ?? _tasks,
-        totalXp: totalXp ?? _totalXp,
-        stats: stats ?? _stats,
-        potionChargeCategories:
-            potionChargeCategories ?? _potionChargeCategories,
+        tasks: _tasks,
+        totalXp: _totalXp + xpDelta,
+        stats: _stats.add(statDelta),
+        potionChargeCategories: _potionChargeCategories,
       ),
     );
+  }
+
+  Future<void> addAdminPotionCharge(TaskCategory category) async {
+    await _saveAndApplyState(
+      TaskSessionState(
+        tasks: _tasks,
+        totalXp: _totalXp,
+        stats: _stats,
+        potionChargeCategories: [..._potionChargeCategories, category],
+      ),
+    );
+  }
+
+  Future<void> resetProgressToSeedState() async {
+    await _saveAndApplyState(createDefaultTaskSessionState());
+  }
+
+  void _replaceState(TaskSessionState state) {
+    _tasks = state.tasks;
+    _potionChargeCategories = state.potionChargeCategories;
+    _totalXp = state.totalXp;
+    _stats = state.stats;
+  }
+
+  Future<void> _saveAndApplyState(TaskSessionState state) async {
+    await _taskService.saveState(state);
+    _replaceState(state);
+    notifyListeners();
+  }
+
+  void _validateNonNegativeStats(CharacterStats stats) {
+    for (final entry in stats.entries) {
+      if (entry.value < 0) {
+        throw ArgumentError.value(
+          entry.value,
+          entry.key.name,
+          'Stat delta must be non-negative.',
+        );
+      }
+    }
   }
 
   String _slugify(String title, int fallbackSuffix) {

@@ -10,6 +10,7 @@ class TaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
     final badgeColor = task.isCompleted
         ? theme.colorScheme.tertiaryContainer
         : theme.colorScheme.secondaryContainer;
@@ -152,20 +153,159 @@ class TaskTile extends StatelessWidget {
                                 ),
                               ],
                             )
-                          : FilledButton.icon(
+                          : _CompleteTaskButton(
                               onPressed: onComplete,
-                              icon: const Icon(Icons.check_circle_rounded),
-                              label: const Text('Complete'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: theme.colorScheme.secondary,
-                                foregroundColor: theme.colorScheme.onSecondary,
-                              ),
+                              disableAnimations: disableAnimations,
                             ),
                     ),
                   ],
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompleteTaskButton extends StatefulWidget {
+  const _CompleteTaskButton({
+    required this.onPressed,
+    required this.disableAnimations,
+  });
+
+  final VoidCallback? onPressed;
+  final bool disableAnimations;
+
+  @override
+  State<_CompleteTaskButton> createState() => _CompleteTaskButtonState();
+}
+
+class _CompleteTaskButtonState extends State<_CompleteTaskButton> {
+  late final WidgetStatesController _statesController;
+
+  @override
+  void initState() {
+    super.initState();
+    _statesController = WidgetStatesController()
+      ..addListener(_handleStateChange);
+  }
+
+  @override
+  void dispose() {
+    _statesController
+      ..removeListener(_handleStateChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleStateChange() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final states = _statesController.value;
+    final isPressed = states.contains(WidgetState.pressed);
+    final isHighlighted =
+        isPressed ||
+        states.contains(WidgetState.hovered) ||
+        states.contains(WidgetState.focused);
+    final successColor = const Color(0xFF3C9A5F);
+    final duration = widget.disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+
+    return AnimatedScale(
+      scale: isPressed ? 0.98 : 1,
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      child: AnimatedContainer(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            if (isHighlighted)
+              BoxShadow(
+                color: successColor.withValues(alpha: isPressed ? 0.16 : 0.20),
+                blurRadius: isPressed ? 12 : 20,
+                offset: Offset(0, isPressed ? 4 : 10),
+              ),
+          ],
+        ),
+        child: FilledButton.icon(
+          onPressed: widget.onPressed,
+          statesController: _statesController,
+          icon: const Icon(Icons.check_circle_rounded),
+          label: const Text('Complete'),
+          style: ButtonStyle(
+            animationDuration: duration,
+            elevation: const WidgetStatePropertyAll(0),
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            ),
+            textStyle: WidgetStatePropertyAll(
+              theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return theme.colorScheme.surfaceContainerHighest;
+              }
+              if (states.contains(WidgetState.pressed)) {
+                return successColor;
+              }
+              if (states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.focused)) {
+                return successColor.withValues(alpha: 0.92);
+              }
+              return theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.94,
+              );
+            }),
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.5,
+                );
+              }
+              if (states.contains(WidgetState.pressed) ||
+                  states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.focused)) {
+                return Colors.white;
+              }
+              return theme.colorScheme.onSurfaceVariant;
+            }),
+            overlayColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.pressed)) {
+                return Colors.white.withValues(alpha: 0.08);
+              }
+              if (states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.focused)) {
+                return successColor.withValues(alpha: 0.08);
+              }
+              return null;
+            }),
+            side: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return BorderSide(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.10),
+                );
+              }
+              if (states.contains(WidgetState.pressed) ||
+                  states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.focused)) {
+                return BorderSide(color: successColor.withValues(alpha: 0.92));
+              }
+              return BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.68),
+              );
+            }),
+            shape: const WidgetStatePropertyAll(StadiumBorder()),
           ),
         ),
       ),

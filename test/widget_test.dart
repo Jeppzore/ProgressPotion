@@ -7,22 +7,20 @@ import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
 import 'package:progress_potion/services/shared_preferences_task_service.dart';
 import 'package:progress_potion/services/task_service.dart';
+import 'package:progress_potion/widgets/character_avatar.dart';
+import 'package:progress_potion/widgets/potion_progress_card.dart';
 import 'package:progress_potion/widgets/potion_reward_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('renders the hero with potion, avatar, and visible stats', (
+  testWidgets('renders the hero with potion view by default', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester);
 
     expect(find.text('ProgressPotion'), findsOneWidget);
     expect(find.text('Brew your next level'), findsOneWidget);
-    expect(find.text('Potionkeeper'), findsOneWidget);
-    expect(find.text('Strength'), findsOneWidget);
-    expect(find.text('Vitality'), findsOneWidget);
-    expect(find.text('Wisdom'), findsOneWidget);
-    expect(find.text('Mindfulness'), findsOneWidget);
+    expect(find.text('Potionkeeper'), findsNothing);
     expect(find.text('1 of 3 charges'), findsOneWidget);
     expect(find.text('Drink Potion'), findsNothing);
 
@@ -30,20 +28,244 @@ void main() {
     expect(find.text('Active Tasks'), findsOneWidget);
   });
 
-  testWidgets('active complete button uses the warm action color', (
+  testWidgets(
+    'swiping the hero reveals the character while keeping tasks below',
+    (WidgetTester tester) async {
+      await _pumpApp(tester);
+
+      await tester.drag(
+        find.byKey(const ValueKey('hero-page-view')),
+        const Offset(-400, 0),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Potionkeeper'), findsOneWidget);
+      expect(find.text('Brew your next level'), findsNothing);
+
+      await _scrollToText(tester, 'Active Tasks');
+      expect(find.text('Active Tasks'), findsOneWidget);
+    },
+  );
+
+  testWidgets('hero page toggles update their selected styling', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester);
 
-    await _scrollToText(tester, 'Active Tasks');
+    final potionToggle = find.byKey(
+      const ValueKey('hero-page-toggle-pill-Potion'),
+    );
+    final characterToggle = find.byKey(
+      const ValueKey('hero-page-toggle-pill-Character'),
+    );
+    final context = tester.element(potionToggle);
+    final selectedColor = Theme.of(
+      context,
+    ).colorScheme.primary.withValues(alpha: 0.14);
+    final unselectedColor = Colors.white.withValues(alpha: 0.55);
 
-    final completeFinder = find.widgetWithText(FilledButton, 'Complete').first;
-    final button = tester.widget<FilledButton>(completeFinder);
-    final context = tester.element(completeFinder);
-    final backgroundColor = button.style?.backgroundColor?.resolve({});
+    expect(_toggleColor(tester, potionToggle), selectedColor);
+    expect(_toggleColor(tester, characterToggle), unselectedColor);
 
-    expect(backgroundColor, Theme.of(context).colorScheme.secondary);
+    await tester.ensureVisible(find.text('Character'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Character'));
+    await tester.pumpAndSettle();
+
+    expect(_toggleColor(tester, potionToggle), unselectedColor);
+    expect(_toggleColor(tester, characterToggle), selectedColor);
   });
+
+  testWidgets('tapping an incomplete potion jiggles it without drinking', (
+    WidgetTester tester,
+  ) async {
+    var drinkCount = 0;
+
+    await _pumpPotionCard(
+      tester,
+      potionChargeCount: 1,
+      currentPotionCategories: const [TaskCategory.fitness],
+      onDrinkPotion: () {
+        drinkCount += 1;
+      },
+    );
+
+    expect(
+      find.byKey(const ValueKey('potion-bottle-jiggle-0')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('potion-bottle-tap-target')));
+    await tester.pump();
+
+    expect(drinkCount, 0);
+    expect(
+      find.byKey(const ValueKey('potion-bottle-jiggle-1')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('drink button still uses the existing callback when full', (
+    WidgetTester tester,
+  ) async {
+    var drinkCount = 0;
+
+    await _pumpPotionCard(
+      tester,
+      progress: 1,
+      potionChargeCount: TaskController.potionCapacity,
+      currentPotionCategories: const [
+        TaskCategory.fitness,
+        TaskCategory.study,
+        TaskCategory.hobby,
+      ],
+      canDrinkPotion: true,
+      onDrinkPotion: () {
+        drinkCount += 1;
+      },
+    );
+
+    await tester.scrollUntilVisible(
+      find.widgetWithText(FilledButton, 'Drink Potion'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Drink Potion'));
+    await tester.pump();
+
+    expect(drinkCount, 1);
+  });
+
+  testWidgets(
+    'active complete button stays subtle by default and turns green on interaction',
+    (WidgetTester tester) async {
+      await _pumpApp(tester);
+
+      await _scrollToText(tester, 'Active Tasks');
+
+      final completeFinder = find
+          .widgetWithText(FilledButton, 'Complete')
+          .first;
+      final button = tester.widget<FilledButton>(completeFinder);
+      final context = tester.element(completeFinder);
+      final backgroundColor = button.style?.backgroundColor?.resolve({});
+      final hoveredColor = button.style?.backgroundColor?.resolve({
+        WidgetState.hovered,
+      });
+      final pressedColor = button.style?.backgroundColor?.resolve({
+        WidgetState.pressed,
+      });
+
+      expect(
+        backgroundColor,
+        Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.94),
+      );
+      expect(hoveredColor, const Color(0xFF3C9A5F).withValues(alpha: 0.92));
+      expect(pressedColor, const Color(0xFF3C9A5F));
+    },
+  );
+
+  testWidgets(
+    'potion liquid shows blended layers for multiple queued categories',
+    (WidgetTester tester) async {
+      await _pumpApp(tester);
+
+      await _completeVisibleTask(tester);
+      await _completeVisibleTask(tester);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 600));
+      await tester.pumpAndSettle();
+
+      final liquidBaseFinder = find.byKey(const ValueKey('potion-liquid-base'));
+
+      expect(liquidBaseFinder, findsOneWidget);
+      expect(find.byKey(const ValueKey('potion-band-wisdom')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('potion-band-strength')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('potion-band-mindfulness')),
+        findsOneWidget,
+      );
+
+      final liquidBase = tester.widget<DecoratedBox>(liquidBaseFinder);
+      final gradient =
+          (liquidBase.decoration as BoxDecoration).gradient! as LinearGradient;
+      final mixedMidColor = gradient.colors[1];
+
+      expect(_channelValue(mixedMidColor, 16), greaterThan(80));
+      expect(_channelValue(mixedMidColor, 8), greaterThan(80));
+      expect(_channelValue(mixedMidColor, 0), greaterThan(80));
+    },
+  );
+
+  testWidgets(
+    'character avatar reflects stat growth with broader body and beard',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        const MediaQuery(
+          data: MediaQueryData(disableAnimations: true),
+          child: MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: CharacterAvatar(
+                  stats: CharacterStats.zero,
+                  celebrationCount: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final baseTorsoSize = tester.getSize(
+        find.byKey(const ValueKey('avatar-torso')),
+      );
+      final baseMouthSize = tester.getSize(
+        find.byKey(const ValueKey('avatar-mouth')),
+      );
+      expect(find.byKey(const ValueKey('avatar-beard')), findsNothing);
+
+      await tester.pumpWidget(
+        const MediaQuery(
+          data: MediaQueryData(disableAnimations: true),
+          child: MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: CharacterAvatar(
+                  stats: CharacterStats(
+                    strength: 6,
+                    vitality: 6,
+                    wisdom: 6,
+                    mindfulness: 6,
+                  ),
+                  celebrationCount: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final grownTorsoSize = tester.getSize(
+        find.byKey(const ValueKey('avatar-torso')),
+      );
+      final grownMouthSize = tester.getSize(
+        find.byKey(const ValueKey('avatar-mouth')),
+      );
+
+      expect(find.byKey(const ValueKey('avatar-beard')), findsOneWidget);
+      expect(grownTorsoSize.width, greaterThan(baseTorsoSize.width));
+      expect(grownTorsoSize.height, greaterThan(baseTorsoSize.height));
+      expect(grownMouthSize.width, greaterThan(baseMouthSize.width));
+      expect(grownMouthSize.height, greaterThan(baseMouthSize.height));
+    },
+  );
 
   testWidgets('adds a task from the add task screen', (
     WidgetTester tester,
@@ -139,6 +361,8 @@ void main() {
       expect(homeScreen.taskController.potionChargeCount, 2);
       expect(homeScreen.taskController.totalXp, 0);
       expect(homeScreen.taskController.stats.strength, 0);
+      expect(find.text('Done'), findsNWidgets(2));
+      expect(find.text('Reward stored in the potion'), findsNWidgets(2));
       expect(
         homeScreen.taskController.completedTasks.any(
           (task) => task.title == 'Refill water flask',
@@ -148,7 +372,7 @@ void main() {
     },
   );
 
-  testWidgets('drinking a full potion updates the visible stat cards', (
+  testWidgets('tapping a full potion bottle drinks it and updates the hero', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester);
@@ -161,14 +385,30 @@ void main() {
     expect(homeScreen.taskController.canDrinkPotion, isTrue);
     expect(homeScreen.taskController.totalXp, 0);
 
-    await homeScreen.taskController.drinkPotion();
+    await _scrollToTopView(tester);
+    await tester.tap(find.byKey(const ValueKey('potion-bottle-tap-target')));
     await tester.pumpAndSettle();
 
+    expect(find.text('Rewards Collected'), findsOneWidget);
     expect(homeScreen.taskController.totalXp, 45);
     expect(homeScreen.taskController.stats.strength, 1);
     expect(homeScreen.taskController.stats.wisdom, 1);
     expect(homeScreen.taskController.stats.mindfulness, 1);
     expect(homeScreen.taskController.potionChargeCount, 0);
+
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Continue'),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Character'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Character'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Potionkeeper'), findsOneWidget);
     expect(find.text('Drink Potion'), findsNothing);
   });
 
@@ -234,6 +474,46 @@ Future<void> _pumpApp(WidgetTester tester, {TaskService? taskService}) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _pumpPotionCard(
+  WidgetTester tester, {
+  double progress = 0.33,
+  int potionChargeCount = 1,
+  List<TaskCategory> currentPotionCategories = const [TaskCategory.fitness],
+  bool canDrinkPotion = false,
+  VoidCallback? onDrinkPotion,
+}) async {
+  await tester.pumpWidget(
+    MediaQuery(
+      data: const MediaQueryData(disableAnimations: true),
+      child: MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              PotionProgressCard(
+                xp: 12,
+                stats: CharacterStats.zero,
+                progress: progress,
+                potionChargeCount: potionChargeCount,
+                potionCapacity: TaskController.potionCapacity,
+                currentPotionCategories: currentPotionCategories,
+                baseRewardXp: TaskController.potionRewardXp,
+                varietyBonusXp: 10,
+                varietyCategoryCount: currentPotionCategories.toSet().length,
+                canDrinkPotion: canDrinkPotion,
+                isDrinkingPotion: false,
+                celebrationCount: 0,
+                onDrinkPotion: onDrinkPotion ?? () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 Future<void> _completeVisibleTask(WidgetTester tester) async {
   final completeButton = find.widgetWithText(FilledButton, 'Complete');
   await tester.scrollUntilVisible(
@@ -253,4 +533,23 @@ Future<void> _scrollToText(WidgetTester tester, String text) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
+}
+
+Future<void> _scrollToTopView(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.byKey(const ValueKey('potion-bottle-tap-target')),
+    -160,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
+Color? _toggleColor(WidgetTester tester, Finder finder) {
+  final widget = tester.widget<AnimatedContainer>(finder);
+  final decoration = widget.decoration! as BoxDecoration;
+  return decoration.color;
+}
+
+int _channelValue(Color color, int shift) {
+  return (color.toARGB32() >> shift) & 0xFF;
 }

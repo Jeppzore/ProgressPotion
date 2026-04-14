@@ -1,9 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/widgets/character_avatar.dart';
 
-class PotionProgressCard extends StatelessWidget {
+class PotionProgressCard extends StatefulWidget {
   const PotionProgressCard({
     super.key,
     required this.xp,
@@ -36,14 +38,78 @@ class PotionProgressCard extends StatelessWidget {
   final VoidCallback onDrinkPotion;
 
   @override
+  State<PotionProgressCard> createState() => _PotionProgressCardState();
+}
+
+class _PotionProgressCardState extends State<PotionProgressCard> {
+  late final PageController _pageController;
+  int _currentPageIndex = 0;
+  int _bottleJiggleCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _setPage(int index) {
+    if (_currentPageIndex == index) {
+      return;
+    }
+
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _handlePotionTap() {
+    if (widget.isDrinkingPotion) {
+      return;
+    }
+
+    if (widget.canDrinkPotion) {
+      widget.onDrinkPotion();
+      return;
+    }
+
+    setState(() {
+      _bottleJiggleCount += 1;
+    });
+  }
+
+  double _heroHeightForWidth(double maxWidth) {
+    if (maxWidth >= 900) {
+      return 720;
+    }
+    if (maxWidth >= 720) {
+      return 740;
+    }
+    if (maxWidth >= 520) {
+      return 780;
+    }
+    return 820;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final spokenChargeCount = potionChargeCount.clamp(0, potionCapacity);
+    final spokenChargeCount = widget.potionChargeCount.clamp(
+      0,
+      widget.potionCapacity,
+    );
     final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     return Semantics(
       label:
-          'Hero section. Potion has $spokenChargeCount of $potionCapacity charges. Total XP $xp. Strength ${stats.strength}. Vitality ${stats.vitality}. Wisdom ${stats.wisdom}. Mindfulness ${stats.mindfulness}.',
+          'Hero section. ${_currentPageIndex == 0 ? 'Potion view' : 'Character view'}. Potion has $spokenChargeCount of ${widget.potionCapacity} charges. Total XP ${widget.xp}. Strength ${widget.stats.strength}. Vitality ${widget.stats.vitality}. Wisdom ${widget.stats.wisdom}. Mindfulness ${widget.stats.mindfulness}.',
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(36),
@@ -88,47 +154,165 @@ class PotionProgressCard extends StatelessWidget {
                 padding: const EdgeInsets.all(24),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final isCompact = constraints.maxWidth < 720;
-
                     final potionPane = _PotionPane(
-                      progress: progress,
-                      potionChargeCount: potionChargeCount,
-                      potionCapacity: potionCapacity,
-                      currentPotionCategories: currentPotionCategories,
-                      canDrinkPotion: canDrinkPotion,
-                      isDrinkingPotion: isDrinkingPotion,
-                      totalRewardPreview: baseRewardXp + varietyBonusXp,
-                      varietyBonusXp: varietyBonusXp,
-                      varietyCategoryCount: varietyCategoryCount,
+                      progress: widget.progress,
+                      potionChargeCount: widget.potionChargeCount,
+                      potionCapacity: widget.potionCapacity,
+                      currentPotionCategories: widget.currentPotionCategories,
+                      canDrinkPotion: widget.canDrinkPotion,
+                      isDrinkingPotion: widget.isDrinkingPotion,
+                      totalRewardPreview:
+                          widget.baseRewardXp + widget.varietyBonusXp,
+                      varietyBonusXp: widget.varietyBonusXp,
+                      varietyCategoryCount: widget.varietyCategoryCount,
                       disableAnimations: disableAnimations,
-                      onDrinkPotion: onDrinkPotion,
+                      jiggleCount: _bottleJiggleCount,
+                      onDrinkPotion: widget.onDrinkPotion,
+                      onPotionTap: _handlePotionTap,
                     );
                     final companionPane = _CompanionPane(
-                      xp: xp,
-                      stats: stats,
-                      celebrationCount: celebrationCount,
+                      xp: widget.xp,
+                      stats: widget.stats,
+                      celebrationCount: widget.celebrationCount,
+                    );
+                    final heroHeight = _heroHeightForWidth(
+                      constraints.maxWidth,
                     );
 
-                    if (isCompact) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          potionPane,
-                          const SizedBox(height: 24),
-                          companionPane,
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(flex: 6, child: potionPane),
-                        const SizedBox(width: 24),
-                        Expanded(flex: 5, child: companionPane),
+                        SizedBox(
+                          height: heroHeight,
+                          child: PageView(
+                            key: const ValueKey('hero-page-view'),
+                            controller: _pageController,
+                            onPageChanged: (index) {
+                              setState(() {
+                                _currentPageIndex = index;
+                              });
+                            },
+                            children: [
+                              _HeroPage(
+                                key: const ValueKey('hero-page-potion'),
+                                child: potionPane,
+                              ),
+                              _HeroPage(
+                                key: const ValueKey('hero-page-character'),
+                                child: companionPane,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Center(
+                          child: Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              _HeroPageToggle(
+                                key: const ValueKey('hero-page-toggle-0'),
+                                label: 'Potion',
+                                isSelected: _currentPageIndex == 0,
+                                onTap: () => _setPage(0),
+                              ),
+                              _HeroPageToggle(
+                                key: const ValueKey('hero-page-toggle-1'),
+                                label: 'Character',
+                                isSelected: _currentPageIndex == 1,
+                                onTap: () => _setPage(1),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     );
                   },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroPage extends StatelessWidget {
+  const _HeroPage({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(alignment: Alignment.topCenter, child: child);
+  }
+}
+
+class _HeroPageToggle extends StatelessWidget {
+  const _HeroPageToggle({
+    super.key,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '$label top view',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: AnimatedContainer(
+          key: ValueKey('hero-page-toggle-pill-$label'),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? theme.colorScheme.primary.withValues(alpha: 0.14)
+                : Colors.white.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: isSelected
+                  ? theme.colorScheme.primary.withValues(alpha: 0.36)
+                  : theme.colorScheme.primary.withValues(alpha: 0.10),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.45,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -151,7 +335,9 @@ class _PotionPane extends StatelessWidget {
     required this.varietyBonusXp,
     required this.varietyCategoryCount,
     required this.disableAnimations,
+    required this.jiggleCount,
     required this.onDrinkPotion,
+    required this.onPotionTap,
   });
 
   final double progress;
@@ -164,7 +350,9 @@ class _PotionPane extends StatelessWidget {
   final int varietyBonusXp;
   final int varietyCategoryCount;
   final bool disableAnimations;
+  final int jiggleCount;
   final VoidCallback onDrinkPotion;
+  final VoidCallback onPotionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +401,10 @@ class _PotionPane extends StatelessWidget {
             child: _PotionBottle(
               progress: progress,
               isFull: canDrinkPotion,
+              categories: currentPotionCategories,
               disableAnimations: disableAnimations,
+              jiggleCount: jiggleCount,
+              onTap: onPotionTap,
             ),
           ),
         ),
@@ -353,7 +544,12 @@ class _CompanionPane extends StatelessWidget {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
-          Center(child: CharacterAvatar(celebrationCount: celebrationCount)),
+          Center(
+            child: CharacterAvatar(
+              stats: stats,
+              celebrationCount: celebrationCount,
+            ),
+          ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
@@ -539,20 +735,27 @@ class _PotionBottle extends StatefulWidget {
   const _PotionBottle({
     required this.progress,
     required this.isFull,
+    required this.categories,
     required this.disableAnimations,
+    required this.jiggleCount,
+    required this.onTap,
   });
 
   final double progress;
   final bool isFull;
+  final List<TaskCategory> categories;
   final bool disableAnimations;
+  final int jiggleCount;
+  final VoidCallback onTap;
 
   @override
   State<_PotionBottle> createState() => _PotionBottleState();
 }
 
 class _PotionBottleState extends State<_PotionBottle>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _loopController;
+  late final AnimationController _jiggleController;
 
   @override
   void initState() {
@@ -560,6 +763,10 @@ class _PotionBottleState extends State<_PotionBottle>
     _loopController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3200),
+    );
+    _jiggleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
     );
     _syncAnimationState();
   }
@@ -570,11 +777,18 @@ class _PotionBottleState extends State<_PotionBottle>
     if (widget.disableAnimations != oldWidget.disableAnimations) {
       _syncAnimationState();
     }
+    if (widget.jiggleCount != oldWidget.jiggleCount &&
+        !widget.disableAnimations) {
+      _jiggleController
+        ..stop()
+        ..forward(from: 0);
+    }
   }
 
   void _syncAnimationState() {
     if (widget.disableAnimations) {
       _loopController.stop();
+      _jiggleController.stop();
       return;
     }
 
@@ -586,160 +800,251 @@ class _PotionBottleState extends State<_PotionBottle>
   @override
   void dispose() {
     _loopController.dispose();
+    _jiggleController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final blend = _resolvePotionBlend(widget.categories, theme);
     final animationDuration = widget.disableAnimations
         ? Duration.zero
         : const Duration(milliseconds: 900);
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(end: widget.progress.clamp(0.0, 1.0)),
-      duration: animationDuration,
-      curve: Curves.easeInOutCubicEmphasized,
-      builder: (context, animatedProgress, _) {
-        return AspectRatio(
-          aspectRatio: 0.72,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: theme.colorScheme.primary.withValues(
-                    alpha: widget.isFull ? 0.22 : 0.08,
-                  ),
-                  blurRadius: widget.isFull ? 44 : 18,
-                  spreadRadius: widget.isFull ? 2 : 0,
-                  offset: const Offset(0, 18),
-                ),
-              ],
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                ClipPath(
-                  clipper: const _PotionBottleClipper(),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.white.withValues(alpha: 0.75),
-                          const Color(0xFFE6ECFF),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: FractionallySizedBox(
-                            heightFactor: animatedProgress.clamp(0.0, 1.0),
-                            widthFactor: 1,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        const Color(0xFF5FE1C8),
-                                        const Color(0xFF1FA5A4),
-                                        theme.colorScheme.primary,
-                                      ],
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                    ),
+    return AnimatedBuilder(
+      animation: Listenable.merge([_loopController, _jiggleController]),
+      builder: (context, _) {
+        final jiggleOffset = widget.disableAnimations
+            ? 0.0
+            : math.sin(_jiggleController.value * math.pi * 5) *
+                  10 *
+                  (1 - _jiggleController.value);
+        final jiggleRotation = widget.disableAnimations
+            ? 0.0
+            : math.sin(_jiggleController.value * math.pi * 5) *
+                  0.025 *
+                  (1 - _jiggleController.value);
+
+        return Transform.translate(
+          key: ValueKey('potion-bottle-jiggle-${widget.jiggleCount}'),
+          offset: Offset(jiggleOffset, 0),
+          child: Transform.rotate(
+            angle: jiggleRotation,
+            child: Semantics(
+              button: true,
+              label: widget.isFull
+                  ? 'Potion bottle, ready to drink'
+                  : 'Potion bottle, not full yet',
+              child: GestureDetector(
+                key: const ValueKey('potion-bottle-tap-target'),
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onTap,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(end: widget.progress.clamp(0.0, 1.0)),
+                  duration: animationDuration,
+                  curve: Curves.easeInOutCubicEmphasized,
+                  builder: (context, animatedProgress, _) {
+                    return AspectRatio(
+                      aspectRatio: 0.72,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: widget.isFull ? 0.22 : 0.08,
+                              ),
+                              blurRadius: widget.isFull ? 44 : 18,
+                              spreadRadius: widget.isFull ? 2 : 0,
+                              offset: const Offset(0, 18),
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            ClipPath(
+                              clipper: const _PotionBottleClipper(),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.white.withValues(alpha: 0.75),
+                                      const Color(0xFFE6ECFF),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
                                   ),
                                 ),
-                                if (!widget.disableAnimations)
-                                  AnimatedBuilder(
-                                    animation: _loopController,
-                                    builder: (context, _) {
-                                      return Align(
-                                        alignment: Alignment(
-                                          -0.2,
-                                          1 - (_loopController.value * 2),
+                                child: Stack(
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: FractionallySizedBox(
+                                        heightFactor: animatedProgress.clamp(
+                                          0.0,
+                                          1.0,
                                         ),
-                                        child: FractionallySizedBox(
-                                          widthFactor: 1,
-                                          heightFactor: 0.3,
-                                          child: DecoratedBox(
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
-                                                colors: [
-                                                  Colors.white.withValues(
-                                                    alpha: 0,
-                                                  ),
-                                                  Colors.white.withValues(
-                                                    alpha: 0.22,
-                                                  ),
-                                                  Colors.white.withValues(
-                                                    alpha: 0,
-                                                  ),
-                                                ],
-                                                begin: Alignment.topCenter,
-                                                end: Alignment.bottomCenter,
+                                        widthFactor: 1,
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            DecoratedBox(
+                                              key: const ValueKey(
+                                                'potion-liquid-base',
+                                              ),
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    blend.baseTop,
+                                                    blend.baseMid,
+                                                    blend.baseBottom,
+                                                  ],
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                ),
                                               ),
                                             ),
+                                            for (final layer in blend.layers)
+                                              _PotionLiquidBand(
+                                                layer: layer,
+                                                shimmerProgress:
+                                                    widget.disableAnimations
+                                                    ? 0.0
+                                                    : _loopController.value,
+                                              ),
+                                            Positioned.fill(
+                                              child: DecoratedBox(
+                                                decoration: BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    colors: [
+                                                      Colors.white.withValues(
+                                                        alpha: 0.20,
+                                                      ),
+                                                      Colors.white.withValues(
+                                                        alpha: 0.06,
+                                                      ),
+                                                      Colors.white.withValues(
+                                                        alpha: 0,
+                                                      ),
+                                                    ],
+                                                    stops: const [
+                                                      0,
+                                                      0.22,
+                                                      0.52,
+                                                    ],
+                                                    begin: Alignment.topCenter,
+                                                    end: Alignment.bottomCenter,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            if (!widget.disableAnimations)
+                                              Align(
+                                                alignment: Alignment(
+                                                  -0.2,
+                                                  1 -
+                                                      (_loopController.value *
+                                                          2),
+                                                ),
+                                                child: FractionallySizedBox(
+                                                  widthFactor: 1,
+                                                  heightFactor: 0.3,
+                                                  child: DecoratedBox(
+                                                    decoration: BoxDecoration(
+                                                      gradient: LinearGradient(
+                                                        colors: [
+                                                          Colors.white
+                                                              .withValues(
+                                                                alpha: 0,
+                                                              ),
+                                                          blend.highlightColor
+                                                              .withValues(
+                                                                alpha: 0.12,
+                                                              ),
+                                                          Colors.white
+                                                              .withValues(
+                                                                alpha: 0.22,
+                                                              ),
+                                                          blend.highlightColor
+                                                              .withValues(
+                                                                alpha: 0.08,
+                                                              ),
+                                                          Colors.white
+                                                              .withValues(
+                                                                alpha: 0,
+                                                              ),
+                                                        ],
+                                                        begin:
+                                                            Alignment.topCenter,
+                                                        end: Alignment
+                                                            .bottomCenter,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            if (!widget.disableAnimations)
+                                              ..._bubbleLayers(
+                                                animatedProgress,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 20,
+                                      left: 24,
+                                      child: Container(
+                                        width: 18,
+                                        height: 180,
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Colors.white.withValues(
+                                                alpha: 0.55,
+                                              ),
+                                              Colors.white.withValues(alpha: 0),
+                                            ],
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
                                           ),
                                         ),
-                                      );
-                                    },
-                                  ),
-                                if (!widget.disableAnimations)
-                                  ..._bubbleLayers(animatedProgress),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 20,
-                          left: 24,
-                          child: Container(
-                            width: 18,
-                            height: 180,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.white.withValues(alpha: 0.55),
-                                  Colors.white.withValues(alpha: 0),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              borderRadius: BorderRadius.circular(999),
                             ),
-                          ),
+                            Positioned.fill(
+                              child: CustomPaint(
+                                painter: _PotionBottlePainter(
+                                  outlineColor: theme.colorScheme.primary
+                                      .withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 12,
+                              child: Container(
+                                width: 86,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF7A4E2F),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _PotionBottlePainter(
-                      outlineColor: theme.colorScheme.primary.withValues(
-                        alpha: 0.5,
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
-                Positioned(
-                  top: 12,
-                  child: Container(
-                    width: 86,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF7A4E2F),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         );
@@ -785,6 +1090,49 @@ class _Bubble extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white.withValues(alpha: opacity),
+      ),
+    );
+  }
+}
+
+class _PotionLiquidBand extends StatelessWidget {
+  const _PotionLiquidBand({required this.layer, required this.shimmerProgress});
+
+  final _PotionBlendLayer layer;
+  final double shimmerProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    final verticalDrift = (shimmerProgress - 0.5) * layer.drift;
+
+    return Align(
+      alignment: Alignment(
+        layer.alignment.x,
+        layer.alignment.y + verticalDrift,
+      ),
+      child: Transform.rotate(
+        angle: layer.rotation,
+        child: FractionallySizedBox(
+          widthFactor: layer.widthFactor,
+          heightFactor: layer.heightFactor,
+          child: DecoratedBox(
+            key: ValueKey('potion-band-${layer.id}'),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  layer.color.withValues(alpha: 0),
+                  layer.color.withValues(alpha: layer.opacity * 0.42),
+                  Colors.white.withValues(alpha: layer.opacity * 0.14),
+                  layer.color.withValues(alpha: layer.opacity * 0.32),
+                  layer.color.withValues(alpha: 0),
+                ],
+                stops: const [0, 0.18, 0.5, 0.82, 1],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -881,12 +1229,183 @@ class _PotionBottlePainter extends CustomPainter {
   }
 }
 
+class _PotionBlendData {
+  const _PotionBlendData({
+    required this.baseTop,
+    required this.baseMid,
+    required this.baseBottom,
+    required this.highlightColor,
+    required this.layers,
+  });
+
+  final Color baseTop;
+  final Color baseMid;
+  final Color baseBottom;
+  final Color highlightColor;
+  final List<_PotionBlendLayer> layers;
+}
+
+class _PotionBlendLayer {
+  const _PotionBlendLayer({
+    required this.id,
+    required this.color,
+    required this.alignment,
+    required this.widthFactor,
+    required this.heightFactor,
+    required this.rotation,
+    required this.opacity,
+    required this.drift,
+  });
+
+  final String id;
+  final Color color;
+  final Alignment alignment;
+  final double widthFactor;
+  final double heightFactor;
+  final double rotation;
+  final double opacity;
+  final double drift;
+}
+
+_PotionBlendData _resolvePotionBlend(
+  List<TaskCategory> categories,
+  ThemeData theme,
+) {
+  final affinityCounts = <CharacterStat, int>{};
+  for (final category in categories) {
+    final stat = CharacterStat.fromTaskCategory(category);
+    affinityCounts.update(stat, (value) => value + 1, ifAbsent: () => 1);
+  }
+
+  final entries = affinityCounts.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+
+  if (entries.isEmpty) {
+    return _PotionBlendData(
+      baseTop: const Color(0xFFE7F6F0),
+      baseMid: const Color(0xFFC7E4D9),
+      baseBottom: theme.colorScheme.primary.withValues(alpha: 0.70),
+      highlightColor: Colors.white,
+      layers: const [],
+    );
+  }
+
+  final totalWeight = entries.fold<int>(0, (sum, entry) => sum + entry.value);
+  final weightedColors = [
+    for (final entry in entries)
+      _WeightedColor(
+        color: _statPotionColor(entry.key),
+        weight: entry.value / totalWeight,
+      ),
+  ];
+  final mixedColor = _mixWeightedColors(weightedColors);
+  final dominantColor = weightedColors.first.color;
+
+  const layerSpecs = [
+    (
+      alignment: Alignment(-0.28, -0.58),
+      widthFactor: 1.22,
+      heightFactor: 0.30,
+      rotation: -0.22,
+      drift: 0.10,
+    ),
+    (
+      alignment: Alignment(0.24, -0.08),
+      widthFactor: 1.10,
+      heightFactor: 0.24,
+      rotation: 0.16,
+      drift: 0.08,
+    ),
+    (
+      alignment: Alignment(-0.18, 0.32),
+      widthFactor: 1.18,
+      heightFactor: 0.22,
+      rotation: 0.22,
+      drift: 0.06,
+    ),
+    (
+      alignment: Alignment(0.18, 0.56),
+      widthFactor: 1.08,
+      heightFactor: 0.20,
+      rotation: -0.12,
+      drift: 0.05,
+    ),
+  ];
+
+  final layers = <_PotionBlendLayer>[
+    for (var index = 0; index < weightedColors.length; index += 1)
+      _PotionBlendLayer(
+        id: entries[index].key.name,
+        color: weightedColors[index].color,
+        alignment: layerSpecs[index].alignment,
+        widthFactor: layerSpecs[index].widthFactor,
+        heightFactor: layerSpecs[index].heightFactor,
+        rotation: layerSpecs[index].rotation,
+        opacity: 0.78 - (index * 0.10),
+        drift: layerSpecs[index].drift,
+      ),
+  ];
+
+  return _PotionBlendData(
+    baseTop: Color.lerp(mixedColor, Colors.white, 0.32)!,
+    baseMid: Color.lerp(mixedColor, dominantColor, 0.26)!,
+    baseBottom: Color.lerp(
+      Color.lerp(mixedColor, dominantColor, 0.45)!,
+      const Color(0xFF183553),
+      0.14,
+    )!,
+    highlightColor: Color.lerp(dominantColor, Colors.white, 0.38)!,
+    layers: layers,
+  );
+}
+
+class _WeightedColor {
+  const _WeightedColor({required this.color, required this.weight});
+
+  final Color color;
+  final double weight;
+}
+
+Color _mixWeightedColors(List<_WeightedColor> colors) {
+  if (colors.isEmpty) {
+    return Colors.transparent;
+  }
+
+  var red = 0.0;
+  var green = 0.0;
+  var blue = 0.0;
+  var alpha = 0.0;
+
+  for (final entry in colors) {
+    red += entry.color.r * entry.weight;
+    green += entry.color.g * entry.weight;
+    blue += entry.color.b * entry.weight;
+    alpha += entry.color.a * entry.weight;
+  }
+
+  return Color.fromARGB(
+    (alpha.clamp(0.0, 1.0) * 255).round(),
+    (red.clamp(0.0, 1.0) * 255).round(),
+    (green.clamp(0.0, 1.0) * 255).round(),
+    (blue.clamp(0.0, 1.0) * 255).round(),
+  );
+}
+
+Color _statPotionColor(CharacterStat stat) {
+  return switch (stat) {
+    CharacterStat.strength => const Color(0xFFD05A4E),
+    CharacterStat.vitality => const Color(0xFFC88944),
+    CharacterStat.wisdom => const Color(0xFF4878D9),
+    CharacterStat.mindfulness => const Color(0xFF4F9770),
+  };
+}
+
 Color _categoryColor(TaskCategory category) {
   return switch (category) {
-    TaskCategory.fitness => const Color(0xFFCD6A43),
-    TaskCategory.home => const Color(0xFFBE5B6A),
-    TaskCategory.study => const Color(0xFF3D62C9),
-    TaskCategory.work => const Color(0xFF5A49B8),
-    TaskCategory.hobby => const Color(0xFF3E8B6B),
+    TaskCategory.fitness => const Color(0xFFD05A4E),
+    TaskCategory.home => const Color(0xFFC88944),
+    TaskCategory.study => const Color(0xFF4878D9),
+    TaskCategory.work => const Color(0xFF4168C8),
+    TaskCategory.hobby => const Color(0xFF4F9770),
   };
 }

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
+import 'package:progress_potion/models/default_task_session_state.dart';
 import 'package:progress_potion/models/task_session_state.dart';
-import 'package:progress_potion/services/in_memory_task_service.dart';
 import 'package:progress_potion/services/task_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,7 +20,7 @@ class SharedPreferencesTaskService implements TaskService {
     final legacyState = _preferences.getString(legacyStorageKey);
     final rawState = savedState ?? legacyState;
     if (rawState == null) {
-      final seedState = InMemoryTaskService.seedState;
+      final seedState = createDefaultTaskSessionState();
       await saveState(seedState);
       return seedState;
     }
