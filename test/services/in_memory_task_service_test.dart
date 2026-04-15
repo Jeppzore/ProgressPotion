@@ -19,6 +19,7 @@ void main() {
       state.tasks.map((task) => task.title),
       contains('Brew morning focus'),
     );
+    expect(state.catalogItems, hasLength(3));
     expect(
       state.tasks.map((task) => task.category),
       contains(TaskCategory.work),
@@ -37,6 +38,15 @@ void main() {
           title: 'Plan the next sprint',
           category: TaskCategory.study,
           description: 'Capture the next three priorities.',
+        ),
+      ],
+      catalogItems: const [
+        TaskCatalogItem(
+          id: 'catalog-plan-the-next-sprint',
+          title: 'Plan the next sprint',
+          category: TaskCategory.study,
+          description: 'Capture the next three priorities.',
+          sortOrder: 0,
         ),
       ],
       totalXp: 40,

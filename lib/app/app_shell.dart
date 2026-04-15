@@ -33,6 +33,11 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _openAddTaskScreen() async {
+    await _initialLoad;
+    if (!mounted) {
+      return;
+    }
+
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => AddTaskScreen(taskController: _taskController),
@@ -74,7 +79,7 @@ class _AppShellState extends State<AppShell> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddTaskScreen,
         icon: const Icon(Icons.add_task),
-        label: const Text('Add task'),
+        label: const Text('Task library'),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );

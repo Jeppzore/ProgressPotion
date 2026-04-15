@@ -6,13 +6,14 @@ import 'package:progress_potion/app/progress_potion_app.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
 import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
+import 'package:progress_potion/models/task_session_state.dart';
+import 'package:progress_potion/screens/add_task/add_task_screen.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
-import 'package:progress_potion/services/shared_preferences_task_service.dart';
 import 'package:progress_potion/services/task_service.dart';
 import 'package:progress_potion/widgets/character_avatar.dart';
 import 'package:progress_potion/widgets/potion_progress_card.dart';
 import 'package:progress_potion/widgets/potion_reward_dialog.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:progress_potion/widgets/task_tile.dart';
 
 void main() {
   testWidgets('renders the hero with potion view by default', (
@@ -503,84 +504,146 @@ void main() {
     },
   );
 
-  testWidgets('adds a task from the add task screen', (
+  testWidgets(
+    'shows a category-first task library, sorts favorites first, and keeps new tasks in the library',
+    (WidgetTester tester) async {
+      final controller = _FakeLibraryTaskController();
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: MaterialApp(home: AddTaskScreen(taskController: controller)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Choose a category first'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Fitness'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Study'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Study'));
+      await tester.pumpAndSettle();
+
+      final favoriteTop = tester.getTopLeft(find.text('Priority summary'));
+      final starterBelow = tester.getTopLeft(find.text('Draft checklist'));
+      expect(favoriteTop.dy, lessThan(starterBelow.dy));
+      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.star_border_rounded), findsOneWidget);
+
+      await tester.ensureVisible(find.byIcon(Icons.star_border_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byIcon(Icons.star_border_rounded),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.toggledFavoriteIds, ['study-starter']);
+
+      await tester.tap(find.text('Create new task'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Task title'),
+        'Write release summary',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Description'),
+        'Keep the update crisp.',
+      );
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Save to library'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Save to library'));
+      await tester.pumpAndSettle();
+
+      expect(controller.createdTaskTitle, 'Write release summary');
+      expect(controller.createdTaskCategory, TaskCategory.study);
+      expect(controller.activatedTaskId, isNull);
+      expect(find.text('Write release summary'), findsOneWidget);
+      expect(find.text('Add to active'), findsWidgets);
+    },
+  );
+
+  testWidgets('failed library saves recover the create form for retry', (
     WidgetTester tester,
   ) async {
-    await _pumpApp(tester);
+    final controller = _FailingLibraryTaskController();
 
-    await tester.tap(find.text('Add task'));
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(disableAnimations: true),
+        child: MaterialApp(home: AddTaskScreen(taskController: controller)),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(AppBar, 'Add task'), findsOneWidget);
-
+    final createTaskButton = find.widgetWithText(TextButton, 'Create new task');
+    await tester.scrollUntilVisible(
+      createTaskButton,
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(createTaskButton);
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Task title'),
-      'Write release summary',
+      'Retry later',
     );
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Description'),
-      'Keep the update crisp.',
+    await tester.ensureVisible(
+      find.widgetWithText(FilledButton, 'Save to library'),
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Add task'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save to library'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Choose a category'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Study'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Add task'));
-    await tester.pumpAndSettle();
-
-    final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
-    expect(homeScreen.taskController.totalCount, 4);
     expect(
-      homeScreen.taskController.activeTasks.first.title,
-      'Write release summary',
+      find.text('Could not save this task. Please try again.'),
+      findsOneWidget,
     );
     expect(
-      homeScreen.taskController.activeTasks.first.category,
-      TaskCategory.study,
+      find.widgetWithText(FilledButton, 'Save to library'),
+      findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('persists a task added from the UI after app rebuild', (
+  testWidgets('task tiles expose a remove action for active tasks', (
     WidgetTester tester,
   ) async {
-    SharedPreferences.setMockInitialValues({});
-    final preferences = await SharedPreferences.getInstance();
+    var removed = false;
 
-    await _pumpApp(
-      tester,
-      taskService: SharedPreferencesTaskService(preferences: preferences),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(20),
+            child: TaskTile(
+              task: const Task(
+                id: 'stand-up',
+                title: 'Plan the stand-up',
+                category: TaskCategory.work,
+                description: 'Keep the active list easy to trim.',
+              ),
+              onComplete: () {},
+              onRemove: () {
+                removed = true;
+              },
+            ),
+          ),
+        ),
+      ),
     );
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Add task'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Task title'),
-      'Persist widget task',
-    );
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Home'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Add task'));
-    await tester.pumpAndSettle();
+    expect(find.text('Complete'), findsOneWidget);
+    expect(find.text('Remove'), findsOneWidget);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpAndSettle();
-    await _pumpApp(
-      tester,
-      taskService: SharedPreferencesTaskService(preferences: preferences),
-    );
+    await tester.tap(find.text('Remove'));
+    await tester.pump();
 
-    final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
-    expect(
-      homeScreen.taskController.activeTasks.first.title,
-      'Persist widget task',
-    );
-    expect(
-      homeScreen.taskController.activeTasks.first.category,
-      TaskCategory.home,
-    );
+    expect(removed, isTrue);
   });
 
   testWidgets(
@@ -789,6 +852,150 @@ Color? _toggleColor(WidgetTester tester, Finder finder) {
 
 int _channelValue(Color color, int shift) {
   return (color.toARGB32() >> shift) & 0xFF;
+}
+
+class _NoOpTaskService implements TaskService {
+  @override
+  Future<TaskSessionState> loadState() async {
+    return TaskSessionState(
+      tasks: const [],
+      catalogItems: const [],
+      totalXp: 0,
+      stats: CharacterStats.zero,
+      potionChargeCategories: const [],
+    );
+  }
+
+  @override
+  Future<void> saveState(TaskSessionState state) async {}
+}
+
+class _FakeLibraryTaskController extends TaskController {
+  _FakeLibraryTaskController() : super(taskService: _NoOpTaskService());
+
+  final Map<TaskCategory, List<TaskCatalogItem>> _itemsByCategory = {
+    TaskCategory.fitness: [
+      TaskCatalogItem(
+        id: 'fitness-starter',
+        title: 'Water break',
+        category: TaskCategory.fitness,
+        description: 'Take a quick reset between blocks.',
+        isDefault: true,
+      ),
+      TaskCatalogItem(
+        id: 'fitness-favorite',
+        title: 'Stretch walk',
+        category: TaskCategory.fitness,
+        description: 'Move around once before lunch.',
+        isFavorite: true,
+      ),
+    ],
+    TaskCategory.study: [
+      TaskCatalogItem(
+        id: 'study-starter',
+        title: 'Draft checklist',
+        category: TaskCategory.study,
+        description: 'Keep the next action obvious.',
+        isDefault: true,
+      ),
+      TaskCatalogItem(
+        id: 'study-favorite',
+        title: 'Priority summary',
+        category: TaskCategory.study,
+        description: 'Capture the important bits first.',
+        isFavorite: true,
+      ),
+    ],
+  };
+
+  String? activatedTaskId;
+  String? createdTaskTitle;
+  TaskCategory? createdTaskCategory;
+  final List<String> toggledFavoriteIds = <String>[];
+
+  @override
+  bool get isLoading => false;
+
+  @override
+  Object? get error => null;
+
+  @override
+  List<TaskCatalogItem> getCatalogByCategory(TaskCategory category) {
+    return List<TaskCatalogItem>.of(_itemsByCategory[category] ?? const []);
+  }
+
+  @override
+  Future<TaskCatalogItem> createCatalogItem({
+    required String title,
+    required TaskCategory category,
+    String description = '',
+  }) async {
+    createdTaskTitle = title;
+    createdTaskCategory = category;
+    final newItem = TaskCatalogItem(
+      id: title.toLowerCase().replaceAll(' ', '-'),
+      title: title,
+      category: category,
+      description: description,
+    );
+    _itemsByCategory.putIfAbsent(category, () => []).insert(0, newItem);
+    notifyListeners();
+    return newItem;
+  }
+
+  @override
+  Future<void> activateCatalogItem(String id) async {
+    activatedTaskId = id;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> toggleFavorite(String id) async {
+    toggledFavoriteIds.add(id);
+    TaskCatalogItem? item;
+    for (final catalogItem in _itemsByCategory.values.expand(
+      (items) => items,
+    )) {
+      if (catalogItem.id == id) {
+        item = catalogItem;
+        break;
+      }
+    }
+    if (item == null) {
+      return;
+    }
+
+    final updatedItem = item.copyWith(isFavorite: !item.isFavorite);
+    for (final entry in _itemsByCategory.entries) {
+      final index = entry.value.indexWhere(
+        (catalogItem) => catalogItem.id == id,
+      );
+      if (index != -1) {
+        entry.value[index] = updatedItem;
+        break;
+      }
+    }
+    notifyListeners();
+  }
+
+  @override
+  Future<void> deleteUserCatalogItem(String id) async {
+    for (final items in _itemsByCategory.values) {
+      items.removeWhere((item) => item.id == id);
+    }
+    notifyListeners();
+  }
+}
+
+class _FailingLibraryTaskController extends _FakeLibraryTaskController {
+  @override
+  Future<TaskCatalogItem> createCatalogItem({
+    required String title,
+    required TaskCategory category,
+    String description = '',
+  }) async {
+    throw StateError('Simulated save failure.');
+  }
 }
 
 class _CharacterAvatarHarness extends StatefulWidget {

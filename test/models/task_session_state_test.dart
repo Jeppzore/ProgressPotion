@@ -22,6 +22,28 @@ void main() {
     expect(decoded.isCompleted, task.isCompleted);
   });
 
+  test('TaskCatalogItem round trips through JSON', () {
+    const catalogItem = TaskCatalogItem(
+      id: 'catalog-study-session',
+      title: 'Study session',
+      category: TaskCategory.study,
+      description: 'Read one chapter.',
+      isFavorite: true,
+      isDefault: false,
+      sortOrder: 7,
+    );
+
+    final decoded = TaskCatalogItem.fromJson(catalogItem.toJson());
+
+    expect(decoded.id, catalogItem.id);
+    expect(decoded.title, catalogItem.title);
+    expect(decoded.category, catalogItem.category);
+    expect(decoded.description, catalogItem.description);
+    expect(decoded.isFavorite, isTrue);
+    expect(decoded.isDefault, isFalse);
+    expect(decoded.sortOrder, 7);
+  });
+
   test('TaskSessionState round trips through JSON', () {
     final state = TaskSessionState(
       tasks: const [
@@ -32,6 +54,20 @@ void main() {
           isCompleted: true,
         ),
         Task(id: 'home-task', title: 'Home task', category: TaskCategory.home),
+      ],
+      catalogItems: const [
+        TaskCatalogItem(
+          id: 'catalog-work-task',
+          title: 'Work task',
+          category: TaskCategory.work,
+          sortOrder: 0,
+        ),
+        TaskCatalogItem(
+          id: 'catalog-home-task',
+          title: 'Home task',
+          category: TaskCategory.home,
+          sortOrder: 1,
+        ),
       ],
       totalXp: 85,
       stats: const CharacterStats(
@@ -46,6 +82,10 @@ void main() {
     final decoded = TaskSessionState.fromJson(state.toJson());
 
     expect(decoded.tasks.map((task) => task.id), ['work-task', 'home-task']);
+    expect(decoded.catalogItems.map((item) => item.id), [
+      'catalog-work-task',
+      'catalog-home-task',
+    ]);
     expect(decoded.totalXp, 85);
     expect(decoded.stats.strength, 2);
     expect(decoded.stats.mindfulness, 8);
@@ -54,6 +94,44 @@ void main() {
       TaskCategory.home,
     ]);
   });
+
+  test(
+    'TaskSessionState migrates schema v2 sessions without catalog items',
+    () {
+      final decoded = TaskSessionState.fromJson({
+        'schemaVersion': 2,
+        'tasks': [
+          {
+            'id': 'legacy-task',
+            'title': 'Legacy task',
+            'description': '',
+            'category': 'work',
+            'isCompleted': true,
+          },
+        ],
+        'totalXp': 30,
+        'stats': const {
+          'strength': 1,
+          'vitality': 2,
+          'wisdom': 3,
+          'mindfulness': 4,
+        },
+        'potionChargeCategories': ['work'],
+      });
+
+      expect(decoded.totalXp, 30);
+      expect(decoded.stats.strength, 1);
+      expect(decoded.catalogItems, hasLength(4));
+      expect(
+        decoded.catalogItems.any((item) => item.id == 'catalog-legacy-task'),
+        isTrue,
+      );
+      expect(
+        decoded.catalogItems.where((item) => item.isDefault),
+        hasLength(3),
+      );
+    },
+  );
 
   test('TaskSessionState migrates schema v1 sessions with zeroed stats', () {
     final decoded = TaskSessionState.fromJson({
@@ -76,6 +154,11 @@ void main() {
     expect(decoded.stats.vitality, 0);
     expect(decoded.stats.wisdom, 0);
     expect(decoded.stats.mindfulness, 0);
+    expect(decoded.catalogItems, hasLength(4));
+    expect(
+      decoded.catalogItems.any((item) => item.id == 'catalog-legacy-task'),
+      isTrue,
+    );
   });
 
   test('TaskCategory rejects unknown storage values', () {
@@ -90,6 +173,7 @@ void main() {
       () => TaskSessionState.fromJson({
         'schemaVersion': TaskSessionState.schemaVersion,
         'tasks': ['not a task'],
+        'catalogItems': const [],
         'totalXp': 0,
         'stats': const {
           'strength': 0,
@@ -103,11 +187,12 @@ void main() {
     );
   });
 
-  test('TaskSessionState rejects missing stats for schema v2', () {
+  test('TaskSessionState rejects missing stats for schema v3', () {
     expect(
       () => TaskSessionState.fromJson({
         'schemaVersion': TaskSessionState.schemaVersion,
         'tasks': const [],
+        'catalogItems': const [],
         'totalXp': 0,
         'potionChargeCategories': const <String>[],
       }),

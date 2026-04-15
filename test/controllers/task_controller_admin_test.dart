@@ -22,6 +22,7 @@ void main() {
     expect(controller.stats, CharacterStats.zero);
     expect(controller.tasks.map((task) => task.id), originalTaskIds);
     expect(controller.potionChargeCategories, originalPotionCategories);
+    expect(controller.catalogItems, hasLength(3));
   });
 
   test(
@@ -64,6 +65,7 @@ void main() {
         ),
       );
       expect(secondController.potionChargeCategories, [TaskCategory.work]);
+      expect(secondController.catalogItems, hasLength(3));
     },
   );
 
@@ -110,6 +112,7 @@ void main() {
       expect(controller.tasks, seedState.tasks);
       expect(controller.totalXp, seedState.totalXp);
       expect(controller.stats, seedState.stats);
+      expect(controller.catalogItems, seedState.catalogItems);
       expect(
         controller.potionChargeCategories,
         seedState.potionChargeCategories,

@@ -12,7 +12,7 @@ void main() {
     controller = TaskController(taskService: InMemoryTaskService());
   });
 
-  test('loadTasks exposes seeded potion charge without awarding XP', () async {
+  test('loadTasks exposes seeded potion charge and catalog', () async {
     await controller.loadTasks();
 
     expect(controller.totalCount, 3);
@@ -24,10 +24,15 @@ void main() {
     expect(controller.totalXp, 0);
     expect(controller.stats.strength, 0);
     expect(controller.potionProgress, closeTo(1 / 3, 0.0001));
+    expect(controller.catalogItems, hasLength(3));
+    expect(
+      controller.getCatalogByCategory(TaskCategory.work).single.isDefault,
+      isTrue,
+    );
   });
 
   test(
-    'addTask grows the active task list without changing potion charge',
+    'addTask remains a compatibility helper that also seeds the catalog',
     () async {
       await controller.loadTasks();
 
@@ -45,7 +50,184 @@ void main() {
         ),
         isTrue,
       );
-      expect(controller.activeTasks.first.category, TaskCategory.work);
+      expect(
+        controller.catalogItems.any(
+          (item) => item.title == 'Draft release notes',
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'createCatalogItem stores a task in the catalog without activating it',
+    () async {
+      await controller.loadTasks();
+
+      await controller.createCatalogItem(
+        title: 'Plan weekly review',
+        category: TaskCategory.study,
+        description: 'Keep it lightweight.',
+      );
+
+      expect(controller.totalCount, 3);
+      expect(controller.activeTasks, hasLength(2));
+      expect(controller.catalogItems, hasLength(4));
+      expect(
+        controller
+            .getCatalogByCategory(TaskCategory.study)
+            .any((item) => item.title == 'Plan weekly review'),
+        isTrue,
+      );
+    },
+  );
+
+  test('createCatalogItem rejects blank titles before persisting', () async {
+    await controller.loadTasks();
+
+    expect(
+      () => controller.createCatalogItem(
+        title: '   ',
+        category: TaskCategory.study,
+      ),
+      throwsArgumentError,
+    );
+    expect(controller.catalogItems, hasLength(3));
+  });
+
+  test('toggleFavorite pins favorites to the top of a category list', () async {
+    await controller.loadTasks();
+
+    final first = await controller.createCatalogItem(
+      title: 'Study warmup',
+      category: TaskCategory.study,
+    );
+    final second = await controller.createCatalogItem(
+      title: 'Study deep dive',
+      category: TaskCategory.study,
+    );
+
+    await controller.toggleFavorite(second.id);
+
+    final studyItems = controller.getCatalogByCategory(TaskCategory.study);
+    expect(studyItems.first.id, second.id);
+    expect(studyItems.first.isFavorite, isTrue);
+    expect(studyItems.any((item) => item.id == first.id), isTrue);
+  });
+
+  test(
+    'activateCatalogItem snapshots catalog data into the active list',
+    () async {
+      await controller.loadTasks();
+
+      final created = await controller.createCatalogItem(
+        title: 'Stretch break',
+        category: TaskCategory.fitness,
+        description: 'Get up and move.',
+      );
+
+      await controller.activateCatalogItem(created.id);
+
+      expect(controller.totalCount, 4);
+      expect(controller.activeTasks.first.title, 'Stretch break');
+      expect(controller.activeTasks.first.category, TaskCategory.fitness);
+      expect(
+        controller.catalogItems.any((item) => item.id == created.id),
+        isTrue,
+      );
+    },
+  );
+
+  test('removeActiveTask removes only uncompleted tasks', () async {
+    await controller.loadTasks();
+
+    final created = await controller.createCatalogItem(
+      title: 'Clear inbox',
+      category: TaskCategory.work,
+    );
+    await controller.activateCatalogItem(created.id);
+
+    expect(controller.totalCount, 4);
+
+    await controller.removeActiveTask(controller.activeTasks.first.id);
+
+    expect(controller.totalCount, 3);
+    expect(
+      controller.activeTasks.any((task) => task.id == created.id),
+      isFalse,
+    );
+    expect(controller.completedCount, 1);
+  });
+
+  test(
+    'deleteUserCatalogItem removes a user-created task from future browsing',
+    () async {
+      await controller.loadTasks();
+
+      final created = await controller.createCatalogItem(
+        title: 'Write retro notes',
+        category: TaskCategory.home,
+      );
+      await controller.activateCatalogItem(created.id);
+
+      await controller.deleteUserCatalogItem(created.id);
+
+      expect(
+        controller.catalogItems.any((item) => item.id == created.id),
+        isFalse,
+      );
+      expect(
+        controller.activeTasks.any((task) => task.title == 'Write retro notes'),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'catalog ids stay unique when a fallback suffix is already taken',
+    () async {
+      final seededController = TaskController(
+        taskService: InMemoryTaskService(
+          initialState: TaskSessionState(
+            tasks: const [],
+            catalogItems: const [
+              TaskCatalogItem(
+                id: 'catalog-reset-inbox',
+                title: 'Reset inbox',
+                category: TaskCategory.work,
+                sortOrder: 0,
+              ),
+              TaskCatalogItem(
+                id: 'catalog-reset-inbox-4',
+                title: 'Reset inbox',
+                category: TaskCategory.work,
+                description: 'Existing suffix',
+                sortOrder: 1,
+              ),
+            ],
+            totalXp: 0,
+            stats: CharacterStats.zero,
+            potionChargeCategories: const [],
+          ),
+        ),
+      );
+      await seededController.loadTasks();
+
+      final created = await seededController.createCatalogItem(
+        title: 'Reset inbox',
+        category: TaskCategory.work,
+        description: 'Fresh start',
+      );
+
+      expect(
+        created.id,
+        isNot(anyOf('catalog-reset-inbox', 'catalog-reset-inbox-4')),
+      );
+      expect(created.id.startsWith('catalog-reset-inbox-'), isTrue);
+      expect(
+        seededController.catalogItems.where((item) => item.id == created.id),
+        hasLength(1),
+      );
     },
   );
 
@@ -199,6 +381,12 @@ void main() {
     expect(secondController.totalCount, 4);
     expect(secondController.activeTasks.first.title, 'Persist this task');
     expect(secondController.activeTasks.first.category, TaskCategory.home);
+    expect(
+      secondController.catalogItems.any(
+        (item) => item.title == 'Persist this task',
+      ),
+      isTrue,
+    );
   });
 
   test('completeTask persists completion and potion charge queue', () async {
@@ -246,6 +434,32 @@ void main() {
             title: 'Four',
             category: TaskCategory.fitness,
             isCompleted: true,
+          ),
+        ],
+        catalogItems: const [
+          TaskCatalogItem(
+            id: 'catalog-one',
+            title: 'One',
+            category: TaskCategory.work,
+            sortOrder: 0,
+          ),
+          TaskCatalogItem(
+            id: 'catalog-two',
+            title: 'Two',
+            category: TaskCategory.study,
+            sortOrder: 1,
+          ),
+          TaskCatalogItem(
+            id: 'catalog-three',
+            title: 'Three',
+            category: TaskCategory.home,
+            sortOrder: 2,
+          ),
+          TaskCatalogItem(
+            id: 'catalog-four',
+            title: 'Four',
+            category: TaskCategory.fitness,
+            sortOrder: 3,
           ),
         ],
         totalXp: 5,

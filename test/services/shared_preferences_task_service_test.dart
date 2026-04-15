@@ -19,6 +19,7 @@ void main() {
     final state = await service.loadState();
 
     expect(state.tasks, hasLength(3));
+    expect(state.catalogItems, hasLength(3));
     expect(state.totalXp, 0);
     expect(state.stats.wisdom, 0);
     expect(state.potionChargeCategories, [TaskCategory.work]);
@@ -28,7 +29,7 @@ void main() {
     );
   });
 
-  test('saveState persists active and completed tasks', () async {
+  test('saveState persists active, completed, and catalog tasks', () async {
     final preferences = await SharedPreferences.getInstance();
     final service = SharedPreferencesTaskService(preferences: preferences);
     final state = TaskSessionState(
@@ -43,6 +44,20 @@ void main() {
           title: 'Completed task',
           category: TaskCategory.study,
           isCompleted: true,
+        ),
+      ],
+      catalogItems: const [
+        TaskCatalogItem(
+          id: 'catalog-active-task',
+          title: 'Active task',
+          category: TaskCategory.home,
+          sortOrder: 0,
+        ),
+        TaskCatalogItem(
+          id: 'catalog-completed-task',
+          title: 'Completed task',
+          category: TaskCategory.study,
+          sortOrder: 1,
         ),
       ],
       totalXp: 0,
@@ -64,6 +79,10 @@ void main() {
       'active-task',
       'completed-task',
     ]);
+    expect(loadedState.catalogItems.map((item) => item.id), [
+      'catalog-active-task',
+      'catalog-completed-task',
+    ]);
     expect(loadedState.tasks.last.isCompleted, isTrue);
     expect(loadedState.stats.vitality, 1);
     expect(loadedState.stats.wisdom, 2);
@@ -79,6 +98,7 @@ void main() {
       await service.saveState(
         TaskSessionState(
           tasks: const [],
+          catalogItems: const [],
           totalXp: 95,
           stats: const CharacterStats(
             strength: 5,
@@ -119,6 +139,15 @@ void main() {
           description: 'Already here.',
         ),
       ],
+      catalogItems: const [
+        TaskCatalogItem(
+          id: 'catalog-saved-task',
+          title: 'Saved task',
+          category: TaskCategory.hobby,
+          description: 'Already here.',
+          sortOrder: 0,
+        ),
+      ],
       totalXp: 25,
       stats: const CharacterStats(
         strength: 0,
@@ -138,14 +167,48 @@ void main() {
 
     expect(loadedState.tasks.single.id, 'saved-task');
     expect(loadedState.tasks.single.category, TaskCategory.hobby);
+    expect(loadedState.catalogItems.single.id, 'catalog-saved-task');
     expect(loadedState.totalXp, 25);
     expect(loadedState.stats.mindfulness, 4);
     expect(loadedState.potionChargeCategories, [TaskCategory.hobby]);
   });
 
-  test('loadState migrates a legacy v1 key into the v2 key', () async {
+  test('loadState migrates a legacy v2 key into the v3 key', () async {
     SharedPreferences.setMockInitialValues({
       SharedPreferencesTaskService.legacyStorageKey: jsonEncode({
+        'schemaVersion': 2,
+        'tasks': const [],
+        'totalXp': 10,
+        'stats': const {
+          'strength': 0,
+          'vitality': 0,
+          'wisdom': 0,
+          'mindfulness': 0,
+        },
+        'potionChargeCategories': ['work'],
+      }),
+    });
+    final preferences = await SharedPreferences.getInstance();
+    final service = SharedPreferencesTaskService(preferences: preferences);
+
+    final loadedState = await service.loadState();
+
+    expect(loadedState.totalXp, 10);
+    expect(loadedState.stats.wisdom, 0);
+    expect(loadedState.catalogItems, hasLength(3));
+    expect(
+      preferences.getString(SharedPreferencesTaskService.storageKey),
+      isNotNull,
+    );
+    expect(
+      preferences.containsKey(SharedPreferencesTaskService.legacyStorageKey),
+      isFalse,
+    );
+  });
+
+  test('loadState migrates a legacy v1 key into the v3 key', () async {
+    SharedPreferences.setMockInitialValues({
+      SharedPreferencesTaskService.olderLegacyStorageKey: jsonEncode({
         'schemaVersion': 1,
         'tasks': const [],
         'totalXp': 10,
@@ -159,12 +222,15 @@ void main() {
 
     expect(loadedState.totalXp, 10);
     expect(loadedState.stats.wisdom, 0);
+    expect(loadedState.catalogItems, hasLength(3));
     expect(
       preferences.getString(SharedPreferencesTaskService.storageKey),
       isNotNull,
     );
     expect(
-      preferences.containsKey(SharedPreferencesTaskService.legacyStorageKey),
+      preferences.containsKey(
+        SharedPreferencesTaskService.olderLegacyStorageKey,
+      ),
       isFalse,
     );
   });

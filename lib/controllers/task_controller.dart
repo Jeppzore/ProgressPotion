@@ -20,6 +20,7 @@ class TaskController extends ChangeNotifier {
   bool _isLoading = true;
   Object? _error;
   List<Task> _tasks = const [];
+  List<TaskCatalogItem> _catalogItems = const [];
   final Set<String> _completingTaskIds = <String>{};
   bool _isClaimingPotionReward = false;
   List<TaskCategory> _potionChargeCategories = const [];
@@ -29,6 +30,8 @@ class TaskController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   Object? get error => _error;
   UnmodifiableListView<Task> get tasks => UnmodifiableListView(_tasks);
+  UnmodifiableListView<TaskCatalogItem> get catalogItems =>
+      UnmodifiableListView(_catalogItems);
   List<Task> get activeTasks =>
       _tasks.where((task) => !task.isCompleted).toList();
   List<Task> get completedTasks =>
@@ -80,24 +83,146 @@ class TaskController extends ChangeNotifier {
     }
   }
 
+  List<TaskCatalogItem> getCatalogByCategory(TaskCategory category) {
+    final items = _catalogItems
+        .where((item) => item.category == category)
+        .toList();
+    items.sort(_compareCatalogItems);
+    return items;
+  }
+
   Future<void> addTask({
     required String title,
     required TaskCategory category,
     String description = '',
   }) async {
-    final task = Task(
-      id: _slugify(title, _tasks.length + 1),
-      title: title.trim(),
+    final trimmedTitle = title.trim();
+    final trimmedDescription = description.trim();
+    if (trimmedTitle.isEmpty) {
+      throw ArgumentError.value(title, 'title', 'Task title is required.');
+    }
+    final catalogItem =
+        _findCatalogItem(trimmedTitle, category, trimmedDescription) ??
+        _buildCatalogItem(
+          title: trimmedTitle,
+          category: category,
+          description: trimmedDescription,
+        );
+    final task = _buildActiveTaskFromCatalog(catalogItem);
+    final nextCatalogItems =
+        _catalogItems.any((item) => item.id == catalogItem.id)
+        ? _catalogItems
+        : [catalogItem, ..._catalogItems];
+
+    await _saveAndApplyState(
+      _buildState(tasks: [task, ..._tasks], catalogItems: nextCatalogItems),
+    );
+  }
+
+  Future<TaskCatalogItem> createCatalogItem({
+    required String title,
+    required TaskCategory category,
+    String description = '',
+  }) async {
+    final trimmedTitle = title.trim();
+    final trimmedDescription = description.trim();
+    if (trimmedTitle.isEmpty) {
+      throw ArgumentError.value(title, 'title', 'Task title is required.');
+    }
+    final existing = _findCatalogItem(
+      trimmedTitle,
+      category,
+      trimmedDescription,
+    );
+    if (existing != null) {
+      return existing;
+    }
+
+    final catalogItem = _buildCatalogItem(
+      title: trimmedTitle,
       category: category,
-      description: description.trim(),
+      description: trimmedDescription,
     );
 
     await _saveAndApplyState(
-      TaskSessionState(
-        tasks: [task, ..._tasks],
-        totalXp: _totalXp,
-        stats: _stats,
-        potionChargeCategories: _potionChargeCategories,
+      _buildState(catalogItems: [catalogItem, ..._catalogItems]),
+    );
+    return catalogItem;
+  }
+
+  Future<void> toggleFavorite(String catalogItemId) async {
+    final currentIndex = _catalogItems.indexWhere(
+      (item) => item.id == catalogItemId,
+    );
+    if (currentIndex == -1) {
+      return;
+    }
+
+    final currentItem = _catalogItems[currentIndex];
+    final updatedItem = currentItem.copyWith(
+      isFavorite: !currentItem.isFavorite,
+    );
+    final nextCatalogItems = [
+      for (final item in _catalogItems)
+        if (item.id == catalogItemId) updatedItem else item,
+    ];
+
+    await _saveAndApplyState(_buildState(catalogItems: nextCatalogItems));
+  }
+
+  Future<void> activateCatalogItem(String catalogItemId) async {
+    final currentIndex = _catalogItems.indexWhere(
+      (item) => item.id == catalogItemId,
+    );
+    if (currentIndex == -1) {
+      return;
+    }
+    final catalogItem = _catalogItems[currentIndex];
+    final alreadyActive = _tasks.any(
+      (task) =>
+          !task.isCompleted &&
+          task.title == catalogItem.title &&
+          task.category == catalogItem.category &&
+          task.description == catalogItem.description,
+    );
+    if (alreadyActive) {
+      return;
+    }
+    final task = _buildActiveTaskFromCatalog(catalogItem);
+
+    await _saveAndApplyState(_buildState(tasks: [task, ..._tasks]));
+  }
+
+  Future<void> removeActiveTask(String taskId) async {
+    final currentIndex = _tasks.indexWhere((task) => task.id == taskId);
+    if (currentIndex == -1 || _tasks[currentIndex].isCompleted) {
+      return;
+    }
+
+    await _saveAndApplyState(
+      _buildState(
+        tasks: [
+          for (final task in _tasks)
+            if (task.id != taskId) task,
+        ],
+      ),
+    );
+  }
+
+  Future<void> deleteUserCatalogItem(String catalogItemId) async {
+    final currentIndex = _catalogItems.indexWhere(
+      (item) => item.id == catalogItemId,
+    );
+    if (currentIndex == -1 || _catalogItems[currentIndex].isDefault) {
+      return;
+    }
+
+    await _saveAndApplyState(
+      _buildState(
+        catalogItems: [
+          for (final item in _catalogItems)
+            if (item.id != catalogItemId) item,
+        ],
       ),
     );
   }
@@ -124,10 +249,8 @@ class TaskController extends ChangeNotifier {
       ];
 
       await _saveAndApplyState(
-        TaskSessionState(
+        _buildState(
           tasks: nextTasks,
-          totalXp: _totalXp,
-          stats: _stats,
           potionChargeCategories: nextPotionChargeCategories,
         ),
       );
@@ -158,8 +281,7 @@ class TaskController extends ChangeNotifier {
           .skip(potionCapacity)
           .toList();
       await _saveAndApplyState(
-        TaskSessionState(
-          tasks: _tasks,
+        _buildState(
           totalXp: _totalXp + result.totalXp,
           stats: _stats.add(statGains),
           potionChargeCategories: nextPotionChargeCategories,
@@ -190,21 +312,13 @@ class TaskController extends ChangeNotifier {
     _validateNonNegativeStats(statDelta);
 
     await _saveAndApplyState(
-      TaskSessionState(
-        tasks: _tasks,
-        totalXp: _totalXp + xpDelta,
-        stats: _stats.add(statDelta),
-        potionChargeCategories: _potionChargeCategories,
-      ),
+      _buildState(totalXp: _totalXp + xpDelta, stats: _stats.add(statDelta)),
     );
   }
 
   Future<void> addAdminPotionCharge(TaskCategory category) async {
     await _saveAndApplyState(
-      TaskSessionState(
-        tasks: _tasks,
-        totalXp: _totalXp,
-        stats: _stats,
+      _buildState(
         potionChargeCategories: [..._potionChargeCategories, category],
       ),
     );
@@ -216,15 +330,114 @@ class TaskController extends ChangeNotifier {
 
   void _replaceState(TaskSessionState state) {
     _tasks = state.tasks;
+    _catalogItems = state.catalogItems;
     _potionChargeCategories = state.potionChargeCategories;
     _totalXp = state.totalXp;
     _stats = state.stats;
+  }
+
+  TaskSessionState _buildState({
+    Iterable<Task>? tasks,
+    Iterable<TaskCatalogItem>? catalogItems,
+    int? totalXp,
+    CharacterStats? stats,
+    Iterable<TaskCategory>? potionChargeCategories,
+  }) {
+    return TaskSessionState(
+      tasks: tasks ?? _tasks,
+      catalogItems: catalogItems ?? _catalogItems,
+      totalXp: totalXp ?? _totalXp,
+      stats: stats ?? _stats,
+      potionChargeCategories: potionChargeCategories ?? _potionChargeCategories,
+    );
   }
 
   Future<void> _saveAndApplyState(TaskSessionState state) async {
     await _taskService.saveState(state);
     _replaceState(state);
     notifyListeners();
+  }
+
+  TaskCatalogItem _buildCatalogItem({
+    required String title,
+    required TaskCategory category,
+    String description = '',
+  }) {
+    return TaskCatalogItem(
+      id: _catalogItemIdForTitle(title),
+      title: title.trim(),
+      category: category,
+      description: description.trim(),
+      sortOrder: _nextCatalogSortOrder(),
+    );
+  }
+
+  Task _buildActiveTaskFromCatalog(TaskCatalogItem catalogItem) {
+    return catalogItem.toTask(id: _taskIdForTitle(catalogItem.title));
+  }
+
+  int _nextCatalogSortOrder() {
+    var highestSortOrder = -1;
+    for (final item in _catalogItems) {
+      if (item.sortOrder > highestSortOrder) {
+        highestSortOrder = item.sortOrder;
+      }
+    }
+    return highestSortOrder + 1;
+  }
+
+  String _catalogItemIdForTitle(String title) {
+    return 'catalog-${_slugify(title, _catalogItems.length + 1, _catalogSlugs)}';
+  }
+
+  String _taskIdForTitle(String title) {
+    return _slugify(title, _tasks.length + 1, _tasks.map((task) => task.id));
+  }
+
+  int _compareCatalogItems(TaskCatalogItem a, TaskCatalogItem b) {
+    if (a.isFavorite != b.isFavorite) {
+      return a.isFavorite ? -1 : 1;
+    }
+
+    if (a.isDefault != b.isDefault) {
+      return a.isDefault ? 1 : -1;
+    }
+
+    if (a.sortOrder != b.sortOrder) {
+      return b.sortOrder.compareTo(a.sortOrder);
+    }
+
+    final titleComparison = a.title.compareTo(b.title);
+    if (titleComparison != 0) {
+      return titleComparison;
+    }
+
+    return a.id.compareTo(b.id);
+  }
+
+  TaskCatalogItem? _findCatalogItem(
+    String title,
+    TaskCategory category,
+    String description,
+  ) {
+    for (final item in _catalogItems) {
+      if (item.title == title &&
+          item.category == category &&
+          item.description == description) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  Iterable<String> get _catalogSlugs sync* {
+    for (final item in _catalogItems) {
+      if (item.id.startsWith('catalog-')) {
+        yield item.id.substring('catalog-'.length);
+      } else {
+        yield item.id;
+      }
+    }
   }
 
   void _validateNonNegativeStats(CharacterStats stats) {
@@ -239,7 +452,12 @@ class TaskController extends ChangeNotifier {
     }
   }
 
-  String _slugify(String title, int fallbackSuffix) {
+  String _slugify(
+    String title,
+    int fallbackSuffix,
+    Iterable<String> existingIds,
+  ) {
+    final existingIdSet = existingIds.toSet();
     final normalized = title
         .trim()
         .toLowerCase()
@@ -247,14 +465,24 @@ class TaskController extends ChangeNotifier {
         .replaceAll(RegExp(r'^-|-$'), '');
 
     if (normalized.isEmpty) {
-      return 'task-$fallbackSuffix';
+      var blankCandidate = 'task-$fallbackSuffix';
+      while (existingIdSet.contains(blankCandidate)) {
+        fallbackSuffix += 1;
+        blankCandidate = 'task-$fallbackSuffix';
+      }
+      return blankCandidate;
     }
 
-    if (_tasks.every((task) => task.id != normalized)) {
+    if (!existingIdSet.contains(normalized)) {
       return normalized;
     }
 
-    return '$normalized-$fallbackSuffix';
+    var candidate = '$normalized-$fallbackSuffix';
+    while (existingIdSet.contains(candidate)) {
+      fallbackSuffix += 1;
+      candidate = '$normalized-$fallbackSuffix';
+    }
+    return candidate;
   }
 }
 

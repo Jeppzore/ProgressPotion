@@ -102,15 +102,15 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
 
   double _heroHeightForWidth(double maxWidth) {
     if (maxWidth >= 900) {
-      return 720;
+      return 640;
     }
     if (maxWidth >= 720) {
-      return 740;
+      return 660;
     }
     if (maxWidth >= 520) {
-      return 780;
+      return 700;
     }
-    return 820;
+    return 740;
   }
 
   @override
@@ -166,7 +166,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(20),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final potionPane = _PotionPane(
@@ -234,7 +234,7 @@ class _PotionProgressCardState extends State<PotionProgressCard> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 14),
                         Center(
                           child: Wrap(
                             spacing: 10,
@@ -494,7 +494,7 @@ class _PotionPane extends StatelessWidget {
         const SizedBox(height: 22),
         Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 300, maxHeight: 360),
+            constraints: const BoxConstraints(maxWidth: 280, maxHeight: 300),
             child: _PotionBottle(
               progress: progress,
               isFull: canDrinkPotion,
@@ -505,7 +505,7 @@ class _PotionPane extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(18),

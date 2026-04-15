@@ -26,6 +26,135 @@ enum TaskCategory {
   }
 }
 
+class TaskCatalogItem {
+  const TaskCatalogItem({
+    required this.id,
+    required this.title,
+    required this.category,
+    this.description = '',
+    this.isFavorite = false,
+    this.isDefault = false,
+    this.sortOrder = 0,
+  });
+
+  final String id;
+  final String title;
+  final TaskCategory category;
+  final String description;
+  final bool isFavorite;
+  final bool isDefault;
+  final int sortOrder;
+
+  TaskCatalogItem copyWith({
+    String? id,
+    String? title,
+    TaskCategory? category,
+    String? description,
+    bool? isFavorite,
+    bool? isDefault,
+    int? sortOrder,
+  }) {
+    return TaskCatalogItem(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      category: category ?? this.category,
+      description: description ?? this.description,
+      isFavorite: isFavorite ?? this.isFavorite,
+      isDefault: isDefault ?? this.isDefault,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
+  Task toTask({String? id, bool isCompleted = false}) {
+    return Task(
+      id: id ?? this.id,
+      title: title,
+      category: category,
+      description: description,
+      isCompleted: isCompleted,
+    );
+  }
+
+  Map<String, Object> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'category': category.storageValue,
+      'isFavorite': isFavorite,
+      'isDefault': isDefault,
+      'sortOrder': sortOrder,
+    };
+  }
+
+  factory TaskCatalogItem.fromJson(Map<String, Object?> json) {
+    final id = json['id'];
+    final title = json['title'];
+    final description = json['description'];
+    final isFavorite = json['isFavorite'];
+    final isDefault = json['isDefault'];
+    final sortOrder = json['sortOrder'] ?? json['createdAt'] ?? 0;
+
+    if (id is! String || id.isEmpty) {
+      throw const FormatException(
+        'Catalog item id must be a non-empty string.',
+      );
+    }
+
+    if (title is! String || title.isEmpty) {
+      throw const FormatException(
+        'Catalog item title must be a non-empty string.',
+      );
+    }
+
+    if (description is! String) {
+      throw const FormatException('Catalog item description must be a string.');
+    }
+
+    if (isFavorite is! bool) {
+      throw const FormatException('Catalog item favorite flag must be bool.');
+    }
+
+    if (isDefault is! bool) {
+      throw const FormatException('Catalog item default flag must be bool.');
+    }
+
+    if (sortOrder is! int || sortOrder < 0) {
+      throw const FormatException(
+        'Catalog item sort order must be a non-negative int.',
+      );
+    }
+
+    return TaskCatalogItem(
+      id: id,
+      title: title,
+      category: TaskCategory.fromStorageValue(json['category']),
+      description: description,
+      isFavorite: isFavorite,
+      isDefault: isDefault,
+      sortOrder: sortOrder,
+    );
+  }
+
+  factory TaskCatalogItem.fromTask(
+    Task task, {
+    String? id,
+    bool isFavorite = false,
+    bool isDefault = false,
+    int sortOrder = 0,
+  }) {
+    return TaskCatalogItem(
+      id: id ?? 'catalog-${task.id}',
+      title: task.title,
+      category: task.category,
+      description: task.description,
+      isFavorite: isFavorite,
+      isDefault: isDefault,
+      sortOrder: sortOrder,
+    );
+  }
+}
+
 class Task {
   const Task({
     required this.id,

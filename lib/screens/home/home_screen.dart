@@ -17,6 +17,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isDrinkingPotion = false;
   int _celebrationCount = 0;
 
+  Future<void> _removeActiveTask(String id) async {
+    await widget.taskController.removeActiveTask(id);
+  }
+
   Future<void> _drinkPotion(BuildContext context) async {
     if (_isDrinkingPotion) {
       return;
@@ -135,11 +139,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     celebrationCount: _celebrationCount,
                     onDrinkPotion: () => _drinkPotion(context),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
                   _SectionHeader(
                     title: 'Active Tasks',
                     subtitle: activeTasks.isEmpty
-                        ? 'No active tasks yet. Add one to start brewing.'
+                        ? 'No active tasks yet. Add one from the library to start brewing.'
                         : 'Complete tasks to fill the potion with category energy.',
                   ),
                   const SizedBox(height: 12),
@@ -147,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const _EmptyStateCard(
                       title: 'No active tasks',
                       message:
-                          'Tap Add task to brew a fresh objective for this session.',
+                          'Open the task library to choose a category and add a fresh objective.',
                     )
                   else
                     for (final task in activeTasks) ...[
@@ -155,6 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         task: task,
                         onComplete: () =>
                             widget.taskController.completeTask(task.id),
+                        onRemove: () => _removeActiveTask(task.id),
                       ),
                       const SizedBox(height: 12),
                     ],

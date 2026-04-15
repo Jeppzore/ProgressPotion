@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:progress_potion/models/task.dart';
 
 class TaskTile extends StatelessWidget {
-  const TaskTile({super.key, required this.task, this.onComplete});
+  const TaskTile({
+    super.key,
+    required this.task,
+    this.onComplete,
+    this.onRemove,
+  });
 
   final Task task;
   final VoidCallback? onComplete;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -31,19 +37,19 @@ class TaskTile extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 6,
-                height: task.description.isEmpty ? 72 : 96,
+                height: task.description.isEmpty ? 64 : 88,
                 decoration: BoxDecoration(
                   color: sideAccent,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,11 +70,11 @@ class TaskTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
-                            vertical: 8,
+                            vertical: 7,
                           ),
                           decoration: BoxDecoration(
                             color: badgeColor,
@@ -83,7 +89,7 @@ class TaskTile extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -94,7 +100,7 @@ class TaskTile extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
-                              vertical: 8,
+                              vertical: 7,
                             ),
                             decoration: BoxDecoration(
                               color: theme.colorScheme.surfaceContainerHighest,
@@ -121,7 +127,7 @@ class TaskTile extends StatelessWidget {
                       ],
                     ),
                     if (task.description.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Text(
                         task.description,
                         style: theme.textTheme.bodyMedium?.copyWith(
@@ -133,7 +139,7 @@ class TaskTile extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     Align(
                       alignment: Alignment.centerRight,
                       child: task.isCompleted
@@ -153,9 +159,25 @@ class TaskTile extends StatelessWidget {
                                 ),
                               ],
                             )
-                          : _CompleteTaskButton(
-                              onPressed: onComplete,
-                              disableAnimations: disableAnimations,
+                          : Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              alignment: WrapAlignment.end,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (onRemove != null)
+                                  TextButton.icon(
+                                    onPressed: onRemove,
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline_rounded,
+                                    ),
+                                    label: const Text('Remove'),
+                                  ),
+                                _CompleteTaskButton(
+                                  onPressed: onComplete,
+                                  disableAnimations: disableAnimations,
+                                ),
+                              ],
                             ),
                     ),
                   ],
