@@ -21,8 +21,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const Duration _taskCompletionAnimationDuration = Duration(
+    milliseconds: 440,
+  );
+
   bool _isDrinkingPotion = false;
   int _celebrationCount = 0;
+  final Set<String> _completingTaskIds = <String>{};
 
   Future<void> _removeActiveTask(String id) async {
     await widget.taskController.removeActiveTask(id);
@@ -41,16 +46,50 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _completeTask(Task task) async {
-    final wasActive = widget.taskController.activeTasks.any(
-      (activeTask) => activeTask.id == task.id,
-    );
-
-    await widget.taskController.completeTask(task.id);
-    if (!mounted || !wasActive) {
+    if (_completingTaskIds.contains(task.id)) {
       return;
     }
 
-    widget.feedbackSoundPlayer.play(FeedbackSound.taskComplete);
+    final wasActive = widget.taskController.activeTasks.any(
+      (activeTask) => activeTask.id == task.id,
+    );
+    if (!wasActive) {
+      return;
+    }
+
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
+    if (!disableAnimations) {
+      setState(() {
+        _completingTaskIds.add(task.id);
+      });
+      await Future<void>.delayed(_taskCompletionAnimationDuration);
+      if (!mounted) {
+        return;
+      }
+    }
+
+    try {
+      await widget.taskController.completeTask(task.id);
+      if (!mounted) {
+        return;
+      }
+
+      widget.feedbackSoundPlayer.play(FeedbackSound.taskComplete);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not complete this task.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _completingTaskIds.remove(task.id);
+        });
+      }
+    }
   }
 
   Future<void> _drinkPotion(BuildContext context) async {
@@ -181,13 +220,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   else
                     for (final task in activeTasks) ...[
                       TaskTile(
+                        key: ValueKey('active-task-${task.id}'),
                         task: task,
                         isFavorite: widget.taskController.isTaskFavorite(
                           task.id,
                         ),
-                        onComplete: () => _completeTask(task),
-                        onRemove: () => _removeActiveTask(task.id),
-                        onFavorite: () => _markTaskAsFavorite(task),
+                        isCompleting: _completingTaskIds.contains(task.id),
+                        onComplete: _completingTaskIds.contains(task.id)
+                            ? null
+                            : () => _completeTask(task),
+                        onRemove: _completingTaskIds.contains(task.id)
+                            ? null
+                            : () => _removeActiveTask(task.id),
+                        onFavorite: _completingTaskIds.contains(task.id)
+                            ? null
+                            : () => _markTaskAsFavorite(task),
                       ),
                       const SizedBox(height: 10),
                     ],

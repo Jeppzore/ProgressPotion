@@ -274,6 +274,78 @@ void main() {
   );
 
   testWidgets(
+    'completing a task turns the card green and slides it before moving it',
+    (WidgetTester tester) async {
+      final feedbackSoundPlayer = _RecordingFeedbackSoundPlayer();
+
+      await _pumpApp(
+        tester,
+        disableAnimations: false,
+        feedbackSoundPlayer: feedbackSoundPlayer,
+      );
+
+      await tester.scrollUntilVisible(
+        find.widgetWithText(FilledButton, 'Complete'),
+        80,
+        scrollable: _activeTasksScrollable(),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.tap(find.widgetWithText(FilledButton, 'Complete').first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      final completingCard = tester.widget<Card>(
+        find.byKey(const ValueKey('task-tile-card-refill-water-flask')),
+      );
+      final completingSlide = tester.widget<AnimatedSlide>(
+        find.byKey(const ValueKey('task-tile-slide-refill-water-flask')),
+      );
+
+      expect(find.text('Refill water flask'), findsOneWidget);
+      expect(completingCard.color, const Color(0xFFE2F3E8));
+      expect(completingSlide.offset.dx, greaterThan(0));
+      expect(find.text('Done'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 440));
+      await tester.pump();
+
+      expect(feedbackSoundPlayer.playedSounds, [FeedbackSound.taskComplete]);
+      expect(find.text('Refill water flask'), findsNothing);
+
+      await tester.tap(find.text('Completed'));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Refill water flask'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'reduced motion completes tasks without waiting for the slide animation',
+    (WidgetTester tester) async {
+      await _pumpApp(tester);
+
+      await tester.scrollUntilVisible(
+        find.widgetWithText(FilledButton, 'Complete'),
+        80,
+        scrollable: _activeTasksScrollable(),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Complete').first);
+      await tester.pump();
+
+      final homeScreen = tester.widget<HomeScreen>(find.byType(HomeScreen));
+
+      expect(
+        homeScreen.taskController.completedTasks.any(
+          (task) => task.id == 'refill-water-flask',
+        ),
+        isTrue,
+      );
+      expect(find.text('Refill water flask'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'potion liquid shows blended layers for multiple queued categories',
     (WidgetTester tester) async {
       await _pumpApp(tester);
@@ -778,6 +850,12 @@ void main() {
       await _pumpApp(tester);
 
       await _scrollToText(tester, 'Active Tasks');
+      await tester.scrollUntilVisible(
+        find.widgetWithText(TextButton, '+ Favorite').first,
+        80,
+        scrollable: _activeTasksScrollable(),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(TextButton, '+ Favorite').first);
       await tester.pumpAndSettle();
 
@@ -1015,10 +1093,11 @@ Future<void> _pumpApp(
   WidgetTester tester, {
   TaskService? taskService,
   FeedbackSoundPlayer? feedbackSoundPlayer,
+  bool disableAnimations = true,
 }) async {
   await tester.pumpWidget(
     MediaQuery(
-      data: const MediaQueryData(disableAnimations: true),
+      data: MediaQueryData(disableAnimations: disableAnimations),
       child: ProgressPotionApp(
         taskService: taskService,
         feedbackSoundPlayer:
@@ -1026,7 +1105,12 @@ Future<void> _pumpApp(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (disableAnimations) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 Future<void> _pumpPotionCard(
@@ -1098,11 +1182,15 @@ Future<void> _completeVisibleTask(WidgetTester tester) async {
   await tester.scrollUntilVisible(
     completeButton,
     120,
-    scrollable: find.byType(Scrollable).first,
+    scrollable: _activeTasksScrollable(),
   );
   await tester.pumpAndSettle();
   await tester.tap(completeButton.first);
   await tester.pumpAndSettle();
+}
+
+Finder _activeTasksScrollable() {
+  return find.byType(Scrollable).first;
 }
 
 Future<void> _scrollToText(WidgetTester tester, String text) async {
