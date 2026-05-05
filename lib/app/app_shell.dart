@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:progress_potion/controllers/task_controller.dart';
 import 'package:progress_potion/screens/admin_tools/admin_tools_screen.dart';
 import 'package:progress_potion/screens/add_task/add_task_screen.dart';
-import 'package:progress_potion/screens/completed_tasks/completed_tasks_screen.dart';
+import 'package:progress_potion/screens/calendar/calendar_screen.dart';
 import 'package:progress_potion/screens/favorites/favorites_screen.dart';
 import 'package:progress_potion/screens/home/home_screen.dart';
 import 'package:progress_potion/services/feedback_sound_service.dart';
@@ -132,7 +132,7 @@ class _AppShellState extends State<AppShell> {
             taskController: _taskController,
             feedbackSoundPlayer: _feedbackSoundPlayer,
           ),
-          CompletedTasksScreen(taskController: _taskController),
+          CalendarScreen(taskController: _taskController),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -157,9 +157,9 @@ class _AppShellState extends State<AppShell> {
             label: 'Favorites',
           ),
           NavigationDestination(
-            icon: Icon(Icons.task_alt_outlined),
-            selectedIcon: Icon(Icons.task_alt),
-            label: 'Completed',
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month),
+            label: 'Calendar',
           ),
         ],
       ),

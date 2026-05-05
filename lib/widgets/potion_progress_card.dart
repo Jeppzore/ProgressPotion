@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:progress_potion/core/theme/task_category_palette.dart';
 import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 import 'package:progress_potion/services/feedback_sound_service.dart';
@@ -560,7 +561,7 @@ class _PotionPane extends StatelessWidget {
                         for (final category in currentPotionCategories)
                           _CategoryChip(
                             label: category.displayName,
-                            color: _categoryColor(category),
+                            color: taskCategoryColor(category),
                             textColor: Colors.white,
                           ),
                       ],
@@ -1720,15 +1721,5 @@ Color _statPotionColor(CharacterStat stat) {
     CharacterStat.vitality => const Color(0xFFC88944),
     CharacterStat.wisdom => const Color(0xFF4878D9),
     CharacterStat.mindfulness => const Color(0xFF4F9770),
-  };
-}
-
-Color _categoryColor(TaskCategory category) {
-  return switch (category) {
-    TaskCategory.fitness => const Color(0xFFD05A4E),
-    TaskCategory.home => const Color(0xFFC88944),
-    TaskCategory.study => const Color(0xFF4878D9),
-    TaskCategory.work => const Color(0xFF4168C8),
-    TaskCategory.hobby => const Color(0xFF4F9770),
   };
 }

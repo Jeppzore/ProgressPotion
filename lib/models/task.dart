@@ -194,6 +194,7 @@ class Task {
     required this.category,
     this.description = '',
     this.isCompleted = false,
+    this.completedAt,
   });
 
   final String id;
@@ -201,6 +202,7 @@ class Task {
   final TaskCategory category;
   final String description;
   final bool isCompleted;
+  final DateTime? completedAt;
 
   Task copyWith({
     String? id,
@@ -208,6 +210,8 @@ class Task {
     TaskCategory? category,
     String? description,
     bool? isCompleted,
+    DateTime? completedAt,
+    bool clearCompletedAt = false,
   }) {
     return Task(
       id: id ?? this.id,
@@ -215,17 +219,22 @@ class Task {
       category: category ?? this.category,
       description: description ?? this.description,
       isCompleted: isCompleted ?? this.isCompleted,
+      completedAt: clearCompletedAt ? null : completedAt ?? this.completedAt,
     );
   }
 
   Map<String, Object> toJson() {
-    return {
+    final json = <String, Object>{
       'id': id,
       'title': title,
       'description': description,
       'category': category.storageValue,
       'isCompleted': isCompleted,
     };
+    if (completedAt != null) {
+      json['completedAt'] = completedAt!.toIso8601String();
+    }
+    return json;
   }
 
   factory Task.fromJson(Map<String, Object?> json) {
@@ -233,6 +242,7 @@ class Task {
     final title = json['title'];
     final description = json['description'];
     final isCompleted = json['isCompleted'];
+    final completedAt = json['completedAt'];
 
     if (id is! String || id.isEmpty) {
       throw const FormatException('Task id must be a non-empty string.');
@@ -250,12 +260,23 @@ class Task {
       throw const FormatException('Task completion must be a boolean.');
     }
 
+    DateTime? parsedCompletedAt;
+    if (completedAt != null) {
+      if (completedAt is! String) {
+        throw const FormatException(
+          'Task completion date must be an ISO-8601 string.',
+        );
+      }
+      parsedCompletedAt = DateTime.parse(completedAt);
+    }
+
     return Task(
       id: id,
       title: title,
       description: description,
       category: TaskCategory.fromStorageValue(json['category']),
       isCompleted: isCompleted,
+      completedAt: parsedCompletedAt,
     );
   }
 }

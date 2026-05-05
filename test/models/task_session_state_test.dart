@@ -5,12 +5,13 @@ import 'package:progress_potion/models/task_session_state.dart';
 
 void main() {
   test('Task round trips through JSON', () {
-    const task = Task(
+    final task = Task(
       id: 'study-session',
       title: 'Study session',
       category: TaskCategory.study,
       description: 'Read one chapter.',
       isCompleted: true,
+      completedAt: DateTime(2026, 5, 5, 9, 30),
     );
 
     final decoded = Task.fromJson(task.toJson());
@@ -20,6 +21,7 @@ void main() {
     expect(decoded.category, task.category);
     expect(decoded.description, task.description);
     expect(decoded.isCompleted, task.isCompleted);
+    expect(decoded.completedAt, task.completedAt);
   });
 
   test('TaskCatalogItem round trips through JSON', () {
@@ -56,6 +58,7 @@ void main() {
           title: 'Work task',
           category: TaskCategory.work,
           isCompleted: true,
+          completedAt: DateTime(2026, 5, 5, 9),
         ),
         Task(id: 'home-task', title: 'Home task', category: TaskCategory.home),
       ],
@@ -98,6 +101,7 @@ void main() {
     expect(decoded.totalXp, 85);
     expect(decoded.stats.strength, 2);
     expect(decoded.stats.mindfulness, 8);
+    expect(decoded.tasks.first.completedAt, DateTime(2026, 5, 5, 9));
     expect(decoded.potionChargeCategories, [
       TaskCategory.work,
       TaskCategory.home,
@@ -174,6 +178,33 @@ void main() {
     expect(decoded.catalogItems.single.completedCount, 0);
     expect(decoded.catalogItems.single.isFavorite, isTrue);
     expect(decoded.catalogItems.single.isStarter, isFalse);
+  });
+
+  test('TaskSessionState migrates schema v5 tasks without completedAt', () {
+    final decoded = TaskSessionState.fromJson({
+      'schemaVersion': 5,
+      'tasks': [
+        {
+          'id': 'completed-before-history',
+          'title': 'Completed before history',
+          'description': '',
+          'category': 'work',
+          'isCompleted': true,
+        },
+      ],
+      'catalogItems': const [],
+      'totalXp': 0,
+      'stats': const {
+        'strength': 0,
+        'vitality': 0,
+        'wisdom': 0,
+        'mindfulness': 0,
+      },
+      'potionChargeCategories': const <String>[],
+    });
+
+    expect(decoded.tasks.single.completedAt, isNull);
+    expect(decoded.tasks.single.isCompleted, isTrue);
   });
 
   test('TaskCatalogItem defaults starter state from legacy default items', () {

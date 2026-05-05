@@ -1,29 +1,34 @@
 import 'package:progress_potion/models/character_stats.dart';
 import 'package:progress_potion/models/task.dart';
 
-const List<Task> defaultSeedTasks = [
-  Task(
-    id: 'brew-morning-focus',
-    title: 'Brew morning focus',
-    category: TaskCategory.work,
-    description: 'Choose the one win that matters most before opening chat.',
-    isCompleted: true,
-  ),
-  Task(
-    id: 'refill-water-flask',
-    title: 'Refill water flask',
-    category: TaskCategory.fitness,
-    description:
-        'Set yourself up for the next work block with one small reset.',
-  ),
-  Task(
-    id: 'ship-one-tiny-step',
-    title: 'Ship one tiny step',
-    category: TaskCategory.hobby,
-    description:
-        'Finish something concrete, even if it only takes ten minutes.',
-  ),
-];
+List<Task> buildDefaultSeedTasks({DateTime? now}) {
+  final seedDate = _normalizeToLocalDay(now ?? DateTime.now());
+
+  return [
+    Task(
+      id: 'brew-morning-focus',
+      title: 'Brew morning focus',
+      category: TaskCategory.work,
+      description: 'Choose the one win that matters most before opening chat.',
+      isCompleted: true,
+      completedAt: seedDate,
+    ),
+    const Task(
+      id: 'refill-water-flask',
+      title: 'Refill water flask',
+      category: TaskCategory.fitness,
+      description:
+          'Set yourself up for the next work block with one small reset.',
+    ),
+    const Task(
+      id: 'ship-one-tiny-step',
+      title: 'Ship one tiny step',
+      category: TaskCategory.hobby,
+      description:
+          'Finish something concrete, even if it only takes ten minutes.',
+    ),
+  ];
+}
 
 const List<TaskCatalogItem> defaultSeedCatalogItems = [
   TaskCatalogItem(
@@ -77,7 +82,7 @@ class TaskSessionState {
          potionChargeCategories,
        );
 
-  static const int schemaVersion = 5;
+  static const int schemaVersion = 6;
 
   final List<Task> tasks;
   final List<TaskCatalogItem> catalogItems;
@@ -127,6 +132,7 @@ class TaskSessionState {
         schemaVersionValue != 2 &&
         schemaVersionValue != 3 &&
         schemaVersionValue != 4 &&
+        schemaVersionValue != 5 &&
         schemaVersionValue != schemaVersion) {
       throw FormatException(
         'Unsupported task session schema version: $schemaVersionValue',
@@ -248,4 +254,9 @@ class TaskSessionState {
     }
     return '$baseId-$suffix';
   }
+}
+
+DateTime _normalizeToLocalDay(DateTime value) {
+  final localValue = value.toLocal();
+  return DateTime(localValue.year, localValue.month, localValue.day);
 }

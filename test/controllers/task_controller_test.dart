@@ -7,9 +7,14 @@ import 'package:progress_potion/services/in_memory_task_service.dart';
 
 void main() {
   late TaskController controller;
+  late DateTime fixedNow;
 
   setUp(() {
-    controller = TaskController(taskService: InMemoryTaskService());
+    fixedNow = DateTime(2026, 5, 5, 9, 30);
+    controller = TaskController(
+      taskService: InMemoryTaskService(),
+      clock: () => fixedNow,
+    );
   });
 
   test('loadTasks exposes seeded potion charge and catalog', () async {
@@ -499,6 +504,17 @@ void main() {
     );
   });
 
+  test('completeTask stamps the completion time on the completed task', () async {
+    await controller.loadTasks();
+
+    await controller.completeTask('refill-water-flask');
+
+    final completedTask = controller.completedTasks.singleWhere(
+      (task) => task.id == 'refill-water-flask',
+    );
+    expect(completedTask.completedAt, fixedNow);
+  });
+
   test('completeTask leaves non-starter tasks completed without respawning', () async {
     await controller.loadTasks();
 
@@ -613,6 +629,80 @@ void main() {
     expect(controller.stats, CharacterStats.zero);
     expect(controller.potionChargeCount, 1);
   });
+
+  test(
+    'calendarMonthSummary groups completions by local day and unique categories',
+    () async {
+      final summaryController = TaskController(
+        taskService: InMemoryTaskService(
+          initialState: TaskSessionState(
+            tasks: [
+              Task(
+                id: 'legacy-completed',
+                title: 'Legacy completed',
+                category: TaskCategory.home,
+                isCompleted: true,
+              ),
+              Task(
+                id: 'work-am',
+                title: 'Work AM',
+                category: TaskCategory.work,
+                isCompleted: true,
+                completedAt: DateTime(2026, 5, 5, 8),
+              ),
+              Task(
+                id: 'fitness-pm',
+                title: 'Fitness PM',
+                category: TaskCategory.fitness,
+                isCompleted: true,
+                completedAt: DateTime(2026, 5, 5, 17),
+              ),
+              Task(
+                id: 'work-late',
+                title: 'Work late',
+                category: TaskCategory.work,
+                isCompleted: true,
+                completedAt: DateTime(2026, 5, 5, 21),
+              ),
+              Task(
+                id: 'hobby-next-day',
+                title: 'Hobby next day',
+                category: TaskCategory.hobby,
+                isCompleted: true,
+                completedAt: DateTime(2026, 5, 6, 10),
+              ),
+            ],
+            catalogItems: const [],
+            totalXp: 0,
+            stats: CharacterStats.zero,
+            potionChargeCategories: const [],
+          ),
+        ),
+      );
+      await summaryController.loadTasks();
+
+      final summary = summaryController.calendarMonthSummary(
+        DateTime(2026, 5),
+      );
+      final may5 = summary.singleWhere(
+        (day) => day.date == DateTime(2026, 5, 5),
+      );
+      final may6 = summary.singleWhere(
+        (day) => day.date == DateTime(2026, 5, 6),
+      );
+
+      expect(summary, hasLength(42));
+      expect(may5.completedTasks, hasLength(3));
+      expect(may5.categories, [TaskCategory.fitness, TaskCategory.work]);
+      expect(may6.completedTasks.single.title, 'Hobby next day');
+      expect(
+        summary.where(
+          (day) => day.completedTasks.any((task) => task.id == 'legacy-completed'),
+        ),
+        isEmpty,
+      );
+    },
+  );
 
   test('addTask persists through a new controller instance', () async {
     final service = InMemoryTaskService();

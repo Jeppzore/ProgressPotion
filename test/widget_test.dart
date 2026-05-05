@@ -31,7 +31,7 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Add Task'), findsOneWidget);
     expect(find.text('Active'), findsOneWidget);
     expect(find.text('Favorites'), findsOneWidget);
-    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Calendar'), findsOneWidget);
 
     await _scrollToText(tester, 'Active Tasks');
     expect(find.text('Active Tasks'), findsOneWidget);
@@ -56,7 +56,7 @@ void main() {
     },
   );
 
-  testWidgets('bottom navigation preserves the active screen state', (
+  testWidgets('bottom navigation preserves active and calendar screen state', (
     WidgetTester tester,
   ) async {
     await _pumpApp(tester);
@@ -70,11 +70,16 @@ void main() {
     expect(find.text('Potionkeeper'), findsOneWidget);
     expect(find.byKey(const ValueKey('task-library-action')), findsOneWidget);
 
-    await tester.tap(find.text('Completed'));
+    await tester.tap(find.text('Calendar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Brew morning focus'), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-screen')), findsOneWidget);
     expect(find.byKey(const ValueKey('task-library-action')), findsNothing);
+
+    final initialMonthLabel = _calendarMonthLabel(tester);
+    await _moveCalendarToAdjacentMonth(tester);
+    final updatedMonthLabel = _calendarMonthLabel(tester);
+    expect(updatedMonthLabel, isNot(initialMonthLabel));
 
     await tester.tap(find.text('Favorites'));
     await tester.pumpAndSettle();
@@ -87,6 +92,11 @@ void main() {
 
     expect(find.text('Potionkeeper'), findsOneWidget);
     expect(find.byKey(const ValueKey('task-library-action')), findsOneWidget);
+
+    await tester.tap(find.text('Calendar'));
+    await tester.pumpAndSettle();
+
+    expect(_calendarMonthLabel(tester), updatedMonthLabel);
   });
 
   testWidgets('hero page toggles update their selected styling', (
@@ -312,10 +322,10 @@ void main() {
       expect(feedbackSoundPlayer.playedSounds, [FeedbackSound.taskComplete]);
       expect(find.text('Refill water flask'), findsOneWidget);
 
-      await tester.tap(find.text('Completed'));
+      await tester.tap(find.text('Calendar'));
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Refill water flask'), findsOneWidget);
+      expect(_calendarDotFinder(_todayDateKey(), TaskCategory.fitness), findsOneWidget);
     },
   );
 
@@ -927,11 +937,13 @@ void main() {
 
     expect(find.text('Refill water flask'), findsOneWidget);
 
-    await tester.tap(find.text('Completed'));
+    await tester.tap(find.text('Calendar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Refill water flask'), findsOneWidget);
-    expect(find.text('Starter'), findsWidgets);
+    expect(
+      _calendarDotFinder(_todayDateKey(), TaskCategory.fitness),
+      findsOneWidget,
+    );
   });
 
   testWidgets('failed library saves recover the create form for retry', (
@@ -1045,11 +1057,14 @@ void main() {
         isTrue,
       );
 
-      await tester.tap(find.text('Completed'));
+      await tester.tap(find.text('Calendar'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Done'), findsNWidgets(2));
-      expect(find.text('Refill water flask'), findsOneWidget);
+      expect(_calendarDotFinder(_todayDateKey(), TaskCategory.work), findsOneWidget);
+      expect(
+        _calendarDotFinder(_todayDateKey(), TaskCategory.fitness),
+        findsOneWidget,
+      );
     },
   );
 
@@ -1151,12 +1166,19 @@ void main() {
     expect(homeScreen.taskController.totalXp, 0);
     expect(find.text('No active tasks'), findsNothing);
 
-    await tester.tap(find.text('Completed'));
+    await tester.tap(find.text('Calendar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Completed'), findsWidgets);
-    expect(find.text('Refill water flask'), findsOneWidget);
-    expect(find.text('Ship one tiny step'), findsOneWidget);
+    expect(find.byKey(const ValueKey('calendar-screen')), findsOneWidget);
+    expect(_calendarDotFinder(_todayDateKey(), TaskCategory.work), findsOneWidget);
+    expect(
+      _calendarDotFinder(_todayDateKey(), TaskCategory.fitness),
+      findsOneWidget,
+    );
+    expect(
+      _calendarDotFinder(_todayDateKey(), TaskCategory.hobby),
+      findsOneWidget,
+    );
   });
 }
 
@@ -1280,6 +1302,43 @@ Future<void> _scrollToTopView(WidgetTester tester) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
+}
+
+String _calendarMonthLabel(WidgetTester tester) {
+  return tester
+      .widget<Text>(find.byKey(const ValueKey('calendar-month-label')))
+      .data!;
+}
+
+Future<void> _moveCalendarToAdjacentMonth(WidgetTester tester) async {
+  final previousButton = tester.widget<IconButton>(
+    find.byKey(const ValueKey('calendar-previous-month')),
+  );
+  final nextButton = tester.widget<IconButton>(
+    find.byKey(const ValueKey('calendar-next-month')),
+  );
+
+  final target = nextButton.onPressed != null
+      ? find.byKey(const ValueKey('calendar-next-month'))
+      : find.byKey(const ValueKey('calendar-previous-month'));
+
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+}
+
+Finder _calendarDotFinder(String dateKey, TaskCategory category) {
+  return find.byKey(ValueKey('calendar-dot-$dateKey-${category.name}'));
+}
+
+String _todayDateKey() {
+  final today = DateTime.now();
+  return _dateKey(today);
+}
+
+String _dateKey(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
 }
 
 Color? _toggleColor(WidgetTester tester, Finder finder) {

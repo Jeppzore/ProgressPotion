@@ -9,15 +9,33 @@ import 'package:progress_potion/services/task_service.dart';
 
 enum FavoriteSort { mostUsed, libraryOrder }
 
+class CalendarDaySummary {
+  const CalendarDaySummary({
+    required this.date,
+    required this.isInDisplayedMonth,
+    required this.categories,
+    required this.completedTasks,
+  });
+
+  final DateTime date;
+  final bool isInDisplayedMonth;
+  final List<TaskCategory> categories;
+  final List<Task> completedTasks;
+}
+
 class TaskController extends ChangeNotifier {
-  TaskController({required TaskService taskService})
-    : _taskService = taskService;
+  TaskController({
+    required TaskService taskService,
+    DateTime Function()? clock,
+  }) : _taskService = taskService,
+       _clock = clock ?? DateTime.now;
 
   static const int potionCapacity = 3;
   static const int potionRewardXp = 30;
   static const int varietyBonusXpPerCategory = 5;
 
   final TaskService _taskService;
+  final DateTime Function() _clock;
 
   bool _isLoading = true;
   Object? _error;
@@ -63,6 +81,35 @@ class TaskController extends ChangeNotifier {
 
   double get potionProgress {
     return (potionChargeCount / potionCapacity).clamp(0, 1).toDouble();
+  }
+
+  List<CalendarDaySummary> calendarMonthSummary(DateTime month) {
+    final displayedMonth = DateTime(month.year, month.month);
+    final firstVisibleDay = _firstVisibleCalendarDay(displayedMonth);
+    final tasksByDay = <DateTime, List<Task>>{};
+
+    for (final task in completedTasks) {
+      final completedAt = task.completedAt;
+      if (completedAt == null) {
+        continue;
+      }
+
+      final day = _localDay(completedAt);
+      tasksByDay.putIfAbsent(day, () => <Task>[]).add(task);
+    }
+
+    return [
+      for (var index = 0; index < 42; index += 1)
+        _buildCalendarDaySummary(
+          date: DateTime(
+            firstVisibleDay.year,
+            firstVisibleDay.month,
+            firstVisibleDay.day + index,
+          ),
+          displayedMonth: displayedMonth,
+          tasksByDay: tasksByDay,
+        ),
+    ];
   }
 
   Iterable<TaskCategory> get _currentPotionCategories {
@@ -354,7 +401,10 @@ class TaskController extends ChangeNotifier {
     try {
       final task = _tasks[currentIndex];
       final matchingCatalogItem = _findCatalogItemForTask(task);
-      final updatedTask = task.copyWith(isCompleted: true);
+      final updatedTask = task.copyWith(
+        isCompleted: true,
+        completedAt: _clock(),
+      );
       final respawnedTask = switch (matchingCatalogItem) {
         TaskCatalogItem(isStarter: true) => _buildActiveTaskFromCatalog(
           matchingCatalogItem,
@@ -635,6 +685,53 @@ class TaskController extends ChangeNotifier {
       candidate = '$normalized-$fallbackSuffix';
     }
     return candidate;
+  }
+
+  CalendarDaySummary _buildCalendarDaySummary({
+    required DateTime date,
+    required DateTime displayedMonth,
+    required Map<DateTime, List<Task>> tasksByDay,
+  }) {
+    final day = _localDay(date);
+    final isInDisplayedMonth = day.month == displayedMonth.month;
+    final dayTasks = isInDisplayedMonth
+        ? List<Task>.unmodifiable(tasksByDay[day] ?? const <Task>[])
+        : const <Task>[];
+
+    return CalendarDaySummary(
+      date: day,
+      isInDisplayedMonth: isInDisplayedMonth,
+      categories: isInDisplayedMonth
+          ? _uniqueCategoriesForCalendar(dayTasks)
+          : const <TaskCategory>[],
+      completedTasks: dayTasks,
+    );
+  }
+
+  DateTime _firstVisibleCalendarDay(DateTime displayedMonth) {
+    final firstDayOfMonth = DateTime(displayedMonth.year, displayedMonth.month);
+    final weekdayFromMonday = firstDayOfMonth.weekday - DateTime.monday;
+    return DateTime(
+      displayedMonth.year,
+      displayedMonth.month,
+      1 - weekdayFromMonday,
+    );
+  }
+
+  DateTime _localDay(DateTime value) {
+    final localValue = value.toLocal();
+    return DateTime(localValue.year, localValue.month, localValue.day);
+  }
+
+  List<TaskCategory> _uniqueCategoriesForCalendar(List<Task> tasks) {
+    final presentCategories = <TaskCategory>{
+      for (final task in tasks) task.category,
+    };
+
+    return [
+      for (final category in TaskCategory.values)
+        if (presentCategories.contains(category)) category,
+    ];
   }
 }
 

@@ -9,11 +9,13 @@ class SharedPreferencesTaskService implements TaskService {
   SharedPreferencesTaskService({required SharedPreferences preferences})
     : _preferences = preferences;
 
-  static const String storageKey = 'progress_potion.session.v5';
-  static const String legacyStorageKey = 'progress_potion.session.v4';
-  static const String olderLegacyStorageKey = 'progress_potion.session.v3';
-  static const String oldestLegacyStorageKey = 'progress_potion.session.v2';
+  static const String storageKey = 'progress_potion.session.v6';
+  static const String legacyStorageKey = 'progress_potion.session.v5';
+  static const String olderLegacyStorageKey = 'progress_potion.session.v4';
+  static const String oldestLegacyStorageKey = 'progress_potion.session.v3';
   static const String oldestSupportedLegacyStorageKey =
+      'progress_potion.session.v2';
+  static const String oldestSupportedLegacyStorageKeyV1 =
       'progress_potion.session.v1';
 
   final SharedPreferences _preferences;
@@ -27,12 +29,16 @@ class SharedPreferencesTaskService implements TaskService {
     final oldestSupportedLegacyState = _preferences.getString(
       oldestSupportedLegacyStorageKey,
     );
+    final oldestSupportedLegacyStateV1 = _preferences.getString(
+      oldestSupportedLegacyStorageKeyV1,
+    );
     final rawState =
         savedState ??
         legacyState ??
         olderLegacyState ??
         oldestLegacyState ??
-        oldestSupportedLegacyState;
+        oldestSupportedLegacyState ??
+        oldestSupportedLegacyStateV1;
     if (rawState == null) {
       final seedState = createDefaultTaskSessionState();
       await saveState(seedState);
@@ -74,6 +80,9 @@ class SharedPreferencesTaskService implements TaskService {
     }
     if (_preferences.containsKey(oldestSupportedLegacyStorageKey)) {
       await _preferences.remove(oldestSupportedLegacyStorageKey);
+    }
+    if (_preferences.containsKey(oldestSupportedLegacyStorageKeyV1)) {
+      await _preferences.remove(oldestSupportedLegacyStorageKeyV1);
     }
   }
 }
