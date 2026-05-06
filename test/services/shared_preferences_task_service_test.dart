@@ -33,7 +33,7 @@ void main() {
     final preferences = await SharedPreferences.getInstance();
     final service = SharedPreferencesTaskService(preferences: preferences);
     final state = TaskSessionState(
-      tasks: const [
+      tasks: [
         Task(
           id: 'active-task',
           title: 'Active task',

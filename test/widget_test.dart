@@ -70,7 +70,7 @@ void main() {
     expect(find.text('Potionkeeper'), findsOneWidget);
     expect(find.byKey(const ValueKey('task-library-action')), findsOneWidget);
 
-    await tester.tap(find.text('Calendar'));
+    await _tapBottomNav(tester, 'Calendar');
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('calendar-screen')), findsOneWidget);
@@ -81,19 +81,19 @@ void main() {
     final updatedMonthLabel = _calendarMonthLabel(tester);
     expect(updatedMonthLabel, isNot(initialMonthLabel));
 
-    await tester.tap(find.text('Favorites'));
+    await _tapBottomNav(tester, 'Favorites');
     await tester.pumpAndSettle();
 
     expect(find.text('No favorites yet'), findsOneWidget);
     expect(find.byKey(const ValueKey('task-library-action')), findsNothing);
 
-    await tester.tap(find.text('Active'));
+    await _tapBottomNav(tester, 'Active');
     await tester.pumpAndSettle();
 
     expect(find.text('Potionkeeper'), findsOneWidget);
     expect(find.byKey(const ValueKey('task-library-action')), findsOneWidget);
 
-    await tester.tap(find.text('Calendar'));
+    await _tapBottomNav(tester, 'Calendar');
     await tester.pumpAndSettle();
 
     expect(_calendarMonthLabel(tester), updatedMonthLabel);
@@ -322,7 +322,7 @@ void main() {
       expect(feedbackSoundPlayer.playedSounds, [FeedbackSound.taskComplete]);
       expect(find.text('Refill water flask'), findsOneWidget);
 
-      await tester.tap(find.text('Calendar'));
+      await _tapBottomNav(tester, 'Calendar');
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(_calendarDotFinder(_todayDateKey(), TaskCategory.fitness), findsOneWidget);
@@ -858,7 +858,7 @@ void main() {
       );
 
       await _pumpApp(tester, taskService: service);
-      await tester.tap(find.text('Favorites'));
+      await _tapBottomNav(tester, 'Favorites');
       await tester.pumpAndSettle();
 
       expect(find.text('Favorites'), findsWidgets);
@@ -898,7 +898,7 @@ void main() {
       expect(find.text('Favorited'), findsOneWidget);
       expect(find.text('Saved to favorites.'), findsOneWidget);
 
-      await tester.tap(find.text('Favorites'));
+      await _tapBottomNav(tester, 'Favorites');
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('task-library-action')), findsNothing);
@@ -937,7 +937,7 @@ void main() {
 
     expect(find.text('Refill water flask'), findsOneWidget);
 
-    await tester.tap(find.text('Calendar'));
+    await _tapBottomNav(tester, 'Calendar');
     await tester.pumpAndSettle();
 
     expect(
@@ -1057,7 +1057,7 @@ void main() {
         isTrue,
       );
 
-      await tester.tap(find.text('Calendar'));
+      await _tapBottomNav(tester, 'Calendar');
       await tester.pumpAndSettle();
 
       expect(_calendarDotFinder(_todayDateKey(), TaskCategory.work), findsOneWidget);
@@ -1166,7 +1166,7 @@ void main() {
     expect(homeScreen.taskController.totalXp, 0);
     expect(find.text('No active tasks'), findsNothing);
 
-    await tester.tap(find.text('Calendar'));
+    await _tapBottomNav(tester, 'Calendar');
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('calendar-screen')), findsOneWidget);
@@ -1271,14 +1271,14 @@ class _RecordingFeedbackSoundPlayer implements FeedbackSoundPlayer {
 }
 
 Future<void> _completeVisibleTask(WidgetTester tester) async {
-  final completeButton = find.widgetWithText(FilledButton, 'Complete');
+  final completeButton = find.widgetWithText(FilledButton, 'Complete').first;
   await tester.scrollUntilVisible(
     completeButton,
     120,
     scrollable: _activeTasksScrollable(),
   );
   await tester.pumpAndSettle();
-  await tester.tap(completeButton.first);
+  await tester.tap(completeButton);
   await tester.pumpAndSettle();
 }
 
@@ -1311,9 +1311,6 @@ String _calendarMonthLabel(WidgetTester tester) {
 }
 
 Future<void> _moveCalendarToAdjacentMonth(WidgetTester tester) async {
-  final previousButton = tester.widget<IconButton>(
-    find.byKey(const ValueKey('calendar-previous-month')),
-  );
   final nextButton = tester.widget<IconButton>(
     find.byKey(const ValueKey('calendar-next-month')),
   );
@@ -1324,6 +1321,17 @@ Future<void> _moveCalendarToAdjacentMonth(WidgetTester tester) async {
 
   await tester.tap(target);
   await tester.pumpAndSettle();
+}
+
+Future<void> _tapBottomNav(WidgetTester tester, String label) async {
+  await tester.tap(_bottomNavLabel(label));
+}
+
+Finder _bottomNavLabel(String label) {
+  return find.descendant(
+    of: find.byType(NavigationBar),
+    matching: find.text(label),
+  );
 }
 
 Finder _calendarDotFinder(String dateKey, TaskCategory category) {

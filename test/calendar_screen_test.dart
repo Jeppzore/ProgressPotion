@@ -136,7 +136,7 @@ Future<void> _pumpCalendarApp(
     ),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Calendar'));
+  await tester.tap(_bottomNavLabel('Calendar'));
   await tester.pumpAndSettle();
 }
 
@@ -169,4 +169,11 @@ String _dateKey(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
   final day = date.day.toString().padLeft(2, '0');
   return '${date.year}-$month-$day';
+}
+
+Finder _bottomNavLabel(String label) {
+  return find.descendant(
+    of: find.byType(NavigationBar),
+    matching: find.text(label),
+  );
 }

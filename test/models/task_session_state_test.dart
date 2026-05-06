@@ -52,7 +52,7 @@ void main() {
 
   test('TaskSessionState round trips through JSON', () {
     final state = TaskSessionState(
-      tasks: const [
+      tasks: [
         Task(
           id: 'work-task',
           title: 'Work task',

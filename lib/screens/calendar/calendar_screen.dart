@@ -98,30 +98,48 @@ class _CalendarScreenState extends State<CalendarScreen> {
               SafeArea(
                 top: false,
                 bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _CalendarHeader(
-                        visibleMonth: _visibleMonth,
-                        canGoToPreviousMonth: _canGoToPreviousMonth,
-                        canGoToNextMonth: _canGoToNextMonth,
-                        onPreviousMonth: _showPreviousMonth,
-                        onNextMonth: _showNextMonth,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxHeight < 700;
+                    final gridHeight = _calendarGridHeight(
+                      constraints.maxWidth - 32,
+                      compact: compact,
+                    );
+
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        compact ? 12 : 16,
+                        16,
+                        20,
                       ),
-                      const SizedBox(height: 12),
-                      const _WeekdayHeader(),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: _CalendarMonthGrid(
-                          summaries: monthSummary,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _CalendarHeader(
+                            visibleMonth: _visibleMonth,
+                            canGoToPreviousMonth: _canGoToPreviousMonth,
+                            canGoToNextMonth: _canGoToNextMonth,
+                            onPreviousMonth: _showPreviousMonth,
+                            onNextMonth: _showNextMonth,
+                            compact: compact,
+                          ),
+                          SizedBox(height: compact ? 10 : 12),
+                          _WeekdayHeader(compact: compact),
+                          SizedBox(height: compact ? 8 : 10),
+                          SizedBox(
+                            height: gridHeight,
+                            child: _CalendarMonthGrid(
+                              summaries: monthSummary,
+                              compact: compact,
+                            ),
+                          ),
+                          SizedBox(height: compact ? 10 : 12),
+                          _CalendarLegend(compact: compact),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      const _CalendarLegend(),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -139,6 +157,7 @@ class _CalendarHeader extends StatelessWidget {
     required this.canGoToNextMonth,
     required this.onPreviousMonth,
     required this.onNextMonth,
+    required this.compact,
   });
 
   final DateTime visibleMonth;
@@ -146,6 +165,7 @@ class _CalendarHeader extends StatelessWidget {
   final bool canGoToNextMonth;
   final VoidCallback onPreviousMonth;
   final VoidCallback onNextMonth;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +180,7 @@ class _CalendarHeader extends StatelessWidget {
           icon: const Icon(Icons.chevron_left_rounded),
           tooltip: 'Previous month',
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: compact ? 8 : 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,22 +188,23 @@ class _CalendarHeader extends StatelessWidget {
               Text(
                 'Calendar',
                 style: theme.textTheme.headlineSmall?.copyWith(
-                  fontSize: 24,
+                  fontSize: compact ? 22 : 24,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: compact ? 2 : 4),
               Text(
                 localizations.formatMonthYear(visibleMonth),
                 key: const ValueKey('calendar-month-label'),
                 style: theme.textTheme.titleMedium?.copyWith(
+                  fontSize: compact ? 15 : null,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: compact ? 8 : 12),
         IconButton.filledTonal(
           key: const ValueKey('calendar-next-month'),
           onPressed: canGoToNextMonth ? onNextMonth : null,
@@ -196,7 +217,9 @@ class _CalendarHeader extends StatelessWidget {
 }
 
 class _WeekdayHeader extends StatelessWidget {
-  const _WeekdayHeader();
+  const _WeekdayHeader({required this.compact});
+
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -214,6 +237,7 @@ class _WeekdayHeader extends StatelessWidget {
                 label,
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: compact ? 11 : null,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -225,9 +249,13 @@ class _WeekdayHeader extends StatelessWidget {
 }
 
 class _CalendarMonthGrid extends StatelessWidget {
-  const _CalendarMonthGrid({required this.summaries});
+  const _CalendarMonthGrid({
+    required this.summaries,
+    required this.compact,
+  });
 
   final List<CalendarDaySummary> summaries;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -244,6 +272,7 @@ class _CalendarMonthGrid extends StatelessWidget {
                       padding: const EdgeInsets.all(3),
                       child: _CalendarDayCell(
                         summary: summaries[(row * 7) + column],
+                        compact: compact,
                       ),
                     ),
                   ),
@@ -256,9 +285,13 @@ class _CalendarMonthGrid extends StatelessWidget {
 }
 
 class _CalendarDayCell extends StatelessWidget {
-  const _CalendarDayCell({required this.summary});
+  const _CalendarDayCell({
+    required this.summary,
+    required this.compact,
+  });
 
   final CalendarDaySummary summary;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -275,12 +308,15 @@ class _CalendarDayCell extends StatelessWidget {
       container: true,
       child: Container(
         key: ValueKey('calendar-day-$keySuffix'),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 5 : 6,
+          vertical: compact ? 5 : 6,
+        ),
         decoration: BoxDecoration(
           color: isVisibleMonth
               ? Colors.white.withValues(alpha: 0.92)
-              : Colors.white.withValues(alpha: 0.48),
-          borderRadius: BorderRadius.circular(18),
+              : Colors.white.withValues(alpha: 0.62),
+          borderRadius: BorderRadius.circular(compact ? 16 : 18),
           border: Border.all(
             color: isToday
                 ? theme.colorScheme.primary.withValues(alpha: 0.55)
@@ -292,37 +328,41 @@ class _CalendarDayCell extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               '${summary.date.day}',
               style: theme.textTheme.labelLarge?.copyWith(
+                fontSize: compact ? 13 : 14,
                 color: isVisibleMonth
                     ? theme.colorScheme.onSurface
                     : theme.colorScheme.onSurfaceVariant.withValues(
-                        alpha: 0.7,
+                        alpha: 0.82,
                       ),
                 fontWeight: isToday ? FontWeight.w900 : FontWeight.w700,
               ),
             ),
-            const Spacer(),
             if (dotCategories.isNotEmpty)
-              Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                children: [
-                  for (final category in dotCategories)
-                    Container(
-                      key: ValueKey(
-                        'calendar-dot-$keySuffix-${category.name}',
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Wrap(
+                  spacing: compact ? 2 : 3,
+                  runSpacing: compact ? 2 : 3,
+                  children: [
+                    for (final category in dotCategories)
+                      Container(
+                        key: ValueKey(
+                          'calendar-dot-$keySuffix-${category.name}',
+                        ),
+                        width: compact ? 5.5 : 6.5,
+                        height: compact ? 5.5 : 6.5,
+                        decoration: BoxDecoration(
+                          color: taskCategoryColor(category),
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: taskCategoryColor(category),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
           ],
         ),
@@ -351,42 +391,54 @@ class _CalendarDayCell extends StatelessWidget {
 }
 
 class _CalendarLegend extends StatelessWidget {
-  const _CalendarLegend();
+  const _CalendarLegend({required this.compact});
+
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Wrap(
-      spacing: 10,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(
-          'Legend',
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: theme.colorScheme.onSurface,
-            fontWeight: FontWeight.w800,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Text(
+            'Legend',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-        for (final category in TaskCategory.values)
-          _LegendChip(category: category),
-      ],
+          SizedBox(width: compact ? 8 : 10),
+          for (final category in TaskCategory.values) ...[
+            _LegendChip(category: category, compact: compact),
+            SizedBox(width: compact ? 6 : 8),
+          ],
+        ],
+      ),
     );
   }
 }
 
 class _LegendChip extends StatelessWidget {
-  const _LegendChip({required this.category});
+  const _LegendChip({
+    required this.category,
+    required this.compact,
+  });
 
   final TaskCategory category;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 9 : 10,
+        vertical: compact ? 5 : 6,
+      ),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(999),
@@ -407,6 +459,7 @@ class _LegendChip extends StatelessWidget {
             category.displayName,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
+              fontSize: compact ? 11 : null,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -495,4 +548,11 @@ String _calendarDateKey(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
   final day = date.day.toString().padLeft(2, '0');
   return '${date.year}-$month-$day';
+}
+
+double _calendarGridHeight(double width, {required bool compact}) {
+  final normalizedWidth = width.clamp(280.0, 560.0);
+  final cellWidth = normalizedWidth / 7;
+  final cellHeight = compact ? cellWidth * 0.9 : cellWidth;
+  return cellHeight * 6;
 }
